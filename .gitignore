@@ -1,3 +1,4 @@
 .env
 workspace/*
 vendor/*
+build/*

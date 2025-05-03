@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit bootstrap="vendor/autoload.php"
-         colors="true"
-         verbose="true">
+<phpunit bootstrap="vendor/autoload.php" executionOrder="random" resolveDependencies="true" colors="true" verbose="true">
     <testsuites>
         <testsuite name="Generated Tests">
             <directory>workspace/generated-tests</directory>
         </testsuite>
     </testsuites>
+    <coverage>
+        <report>
+            <clover outputFile="build/logs/clover.xml"/>
+            <html outputDirectory="build/coverage"/>
+        </report>
+    </coverage>
 </phpunit>

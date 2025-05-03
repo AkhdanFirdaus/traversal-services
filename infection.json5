@@ -1,7 +1,7 @@
 {
     "source": {
         "directories": [
-            "workspace/repo
+            "workspace/repo"
         ],
         "excludes": [
             "vendor"
@@ -12,6 +12,9 @@
         "text": "infection.log",
         "html": "infection.html",
         "summary": "summary.log"
+    },
+    "phpUnit": {
+        "configDir": "."
     },
     "mutators": {
         "@default": true,

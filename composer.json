@@ -2,21 +2,18 @@
   "autoload": {
     "psr-4": {
       "Engine\\": "engine/",
-      "CustomMutator\\": "materials/custom-mutators/"
+      "App\\Mutator\\": "materials/custom-mutators/"
     }
   },
   "require": {
-    "phpunit/phpunit": "^10.0",
     "infection/mutator": "^0.4.0"
   },
   "require-dev": {
-    "infection/infection": "^0.29"
+    "phpunit/phpunit": "^11.5",
+    "infection/infection": "^0.29.10"
   },
   "config": {
       "allow-plugins": {
-          "third-party/required-plugin": true,
-          "my-organization/*": true,
-          "unnecessary/plugin": false,
           "infection/extension-installer": true
       }
   }
