@@ -31,7 +31,7 @@ class Main {
 
         // 3. Detect Traversal Risks
         $patterns = $pg->getOriginalPatterns();
-        $detector = new Detector();
+        $detector = new Detector($patterns);
         $vulns = $detector->detect($results);
         Utils::saveReport('3-detector', $vulns);
 
