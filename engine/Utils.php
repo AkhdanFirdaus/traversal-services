@@ -22,4 +22,14 @@ class Utils {
         }
         exec("git clone $url $targetDir");
     }
+
+    public static function saveReport(string $stepName, $content): void {
+        $reportDir = './workspace/reports/';
+        if (!is_dir($reportDir)) {
+            mkdir($reportDir, 0777, true);
+        }
+        $filePath = "$reportDir/{$stepName}.json";
+        file_put_contents($filePath, json_encode($content, JSON_PRETTY_PRINT));
+        echo "Report saved to $filePath\n";
+    }
 }

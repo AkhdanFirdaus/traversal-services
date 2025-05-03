@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0ece1a2954a22d9c93fb5029a2f05502",
+    "content-hash": "f8a58aea4ebe132eeaa7fd42e6f5195a",
     "packages": [
         {
             "name": "infection/mutator",

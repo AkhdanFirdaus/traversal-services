@@ -3,37 +3,43 @@
     "cwe": "CWE-22",
     "name": "Basic Path Traversal",
     "pattern": ["../", "..\\"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-23",
     "name": "Relative Path Traversal",
     "pattern": ["../../", "..\\..\\", "../.."],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-24",
     "name": "Traversal to Specific Directory",
     "pattern": ["../admin", "../config"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-25",
     "name": "Absolute Path",
     "pattern": ["/etc/passwd", "C:\\Windows\\System32\\drivers\\etc\\hosts"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-26",
     "name": "Obfuscated Traversal",
     "pattern": [".../...//", "...\\...\\\\"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-27",
     "name": "Folder Up One Level",
     "pattern": ["images/..", "uploads/.."],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-28",
@@ -57,37 +63,43 @@
     "cwe": "CWE-22",
     "name": "Basic Path Traversal",
     "patterns": ["../", "..\\"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-23",
     "name": "Relative Path Traversal",
     "patterns": ["../../", "..\\..\\", "../.."],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-24",
     "name": "Traversal to Specific Directory",
     "patterns": ["../admin", "../config"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-25",
     "name": "Absolute Path",
     "patterns": ["/etc/passwd", "C:\\Windows\\System32\\drivers\\etc\\hosts"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-26",
     "name": "Obfuscated Traversal",
     "patterns": [".../...//", "...\\...\\\\"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-27",
     "name": "Folder Up One Level",
     "patterns": ["images/..", "uploads/.."],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-28",
@@ -105,25 +117,29 @@
     "cwe": "CWE-30",
     "name": "Null Byte Injection",
     "patterns": ["../../etc/passwd%00.png", "..\\..\\secret.txt%00"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-31",
     "name": "Mid-Path Traversal",
     "patterns": ["images/../../admin/config.php", "uploads/../../.env"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-32",
     "name": "dir/.. Normalization",
     "patterns": ["static/..", "assets/../", "public/../private"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-33",
     "name": "Double Upward Traversal",
     "patterns": ["folder/sub/../../secret.txt", "x/y/z/../../../config.ini"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-34",
@@ -133,13 +149,15 @@
       "..\\..\\..\\boot.ini",
       "../../../../var/log/auth.log"
     ],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-35",
     "name": "Extra Dots",
     "patterns": ["passwd...", "config.php...", "secret.txt........"],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-36",
@@ -149,7 +167,8 @@
       "../..\\../etc/passwd",
       "..\\..//..\\data\\secret"
     ],
-    "encoding": "none"
+    "encoding": "none",
+    "notes": ""
   },
   {
     "cwe": "CWE-31",

@@ -6,7 +6,8 @@
     }
   },
   "require": {
-    "infection/mutator": "^0.4.0"
+    "infection/mutator": "^0.4.0",
+    "nikic/php-parser": "^5.4"
   },
   "require-dev": {
     "phpunit/phpunit": "^11.5",
@@ -18,4 +19,3 @@
       }
   }
 }
-  
