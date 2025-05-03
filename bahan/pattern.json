@@ -1,0 +1,231 @@
+[
+  {
+    "cwe": "CWE-22",
+    "name": "Basic Path Traversal",
+    "pattern": ["../", "..\\"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-23",
+    "name": "Relative Path Traversal",
+    "pattern": ["../../", "..\\..\\", "../.."],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-24",
+    "name": "Traversal to Specific Directory",
+    "pattern": ["../admin", "../config"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-25",
+    "name": "Absolute Path",
+    "pattern": ["/etc/passwd", "C:\\Windows\\System32\\drivers\\etc\\hosts"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-26",
+    "name": "Obfuscated Traversal",
+    "pattern": [".../...//", "...\\...\\\\"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-27",
+    "name": "Folder Up One Level",
+    "pattern": ["images/..", "uploads/.."],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-28",
+    "name": "Double Encoded Traversal",
+    "pattern": ["%252e%252e%252f", "%255c%255c"],
+    "encoding": "double"
+  },
+  {
+    "cwe": "CWE-29",
+    "name": "Unicode Traversal",
+    "pattern": ["%u2216%u2216", "%u002e%u002e%u002f"],
+    "encoding": "unicode"
+  },
+  {
+    "cwe": "CWE-30",
+    "name": "Null Byte Injection",
+    "pattern": ["%00", "%00.png", "%00.txt"],
+    "encoding": "null-byte"
+  },
+  {
+    "cwe": "CWE-22",
+    "name": "Basic Path Traversal",
+    "patterns": ["../", "..\\"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-23",
+    "name": "Relative Path Traversal",
+    "patterns": ["../../", "..\\..\\", "../.."],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-24",
+    "name": "Traversal to Specific Directory",
+    "patterns": ["../admin", "../config"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-25",
+    "name": "Absolute Path",
+    "patterns": ["/etc/passwd", "C:\\Windows\\System32\\drivers\\etc\\hosts"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-26",
+    "name": "Obfuscated Traversal",
+    "patterns": [".../...//", "...\\...\\\\"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-27",
+    "name": "Folder Up One Level",
+    "patterns": ["images/..", "uploads/.."],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-28",
+    "name": "Double Encoded Traversal",
+    "patterns": ["../../etc/passwd", "..\\..\\secret.txt"],
+    "encoding": "double"
+  },
+  {
+    "cwe": "CWE-29",
+    "name": "Unicode Encoded Traversal",
+    "patterns": ["\u2216\u2216etc\u2216passwd"],
+    "encoding": "unicode"
+  },
+  {
+    "cwe": "CWE-30",
+    "name": "Null Byte Injection",
+    "patterns": ["../../etc/passwd%00.png", "..\\..\\secret.txt%00"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-31",
+    "name": "Mid-Path Traversal",
+    "patterns": ["images/../../admin/config.php", "uploads/../../.env"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-32",
+    "name": "dir/.. Normalization",
+    "patterns": ["static/..", "assets/../", "public/../private"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-33",
+    "name": "Double Upward Traversal",
+    "patterns": ["folder/sub/../../secret.txt", "x/y/z/../../../config.ini"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-34",
+    "name": "Multi-Level Traversal (3+)",
+    "patterns": [
+      "../../../etc/passwd",
+      "..\\..\\..\\boot.ini",
+      "../../../../var/log/auth.log"
+    ],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-35",
+    "name": "Extra Dots",
+    "patterns": ["passwd...", "config.php...", "secret.txt........"],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-36",
+    "name": "Mixed Slashes",
+    "patterns": [
+      "..\\/..\\/windows\\system32",
+      "../..\\../etc/passwd",
+      "..\\..//..\\data\\secret"
+    ],
+    "encoding": "none"
+  },
+  {
+    "cwe": "CWE-31",
+    "name": "Path Traversal in Middle of Path",
+    "patterns": ["images/../../admin/config.php", "uploads/../../.env"],
+    "encoding": "none",
+    "notes": "Traversal muncul di tengah path, bukan awal."
+  },
+  {
+    "cwe": "CWE-32",
+    "name": "Traversal via dir/.. normalization",
+    "patterns": ["static/..", "assets/../", "public/../private"],
+    "encoding": "none",
+    "notes": "Mengecoh validasi dengan nama folder sah lalu diikuti '..'"
+  },
+  {
+    "cwe": "CWE-33",
+    "name": "Double Upward Traversal",
+    "patterns": ["folder/sub/../../secret.txt", "x/y/z/../../../config.ini"],
+    "encoding": "none",
+    "notes": "Naik 2+ level dari dalam direktori nested."
+  },
+  {
+    "cwe": "CWE-34",
+    "name": "Multi-Level Traversal (3+ levels)",
+    "patterns": [
+      "../../../etc/passwd",
+      "..\\..\\..\\boot.ini",
+      "../../../../var/log/auth.log"
+    ],
+    "encoding": "none",
+    "notes": "Level traversal lebih dari dua tingkat."
+  },
+  {
+    "cwe": "CWE-35",
+    "name": "Filename with Extra Dots",
+    "patterns": ["passwd...", "config.php...", "secret.txt........"],
+    "encoding": "none",
+    "notes": "Menggunakan titik-titik tambahan untuk bypass filter atau ekstensi."
+  },
+  {
+    "cwe": "CWE-36",
+    "name": "Path Traversal with Mixed Slashes",
+    "patterns": [
+      "..\\/..\\/windows\\system32",
+      "../..\\../etc/passwd",
+      "..\\..//..\\data\\secret"
+    ],
+    "encoding": "none",
+    "notes": "Menggunakan kombinasi '/' dan '\\' untuk mengecoh sistem parsing path."
+  },
+  {
+    "cwe": "CWE-639",
+    "name": "Authorization Bypass via Predictable User ID",
+    "vectors": [
+      {
+        "location": "query",
+        "parameter": "user_id",
+        "attack_values": ["1", "2", "100", "9999"]
+      },
+      {
+        "location": "query",
+        "parameter": "account_id",
+        "attack_values": ["200", "201", "202", "999"]
+      },
+      {
+        "location": "path",
+        "template": "/user/{id}/profile",
+        "attack_values": ["1", "5", "999"]
+      },
+      {
+        "location": "body",
+        "parameter": "target_user_id",
+        "attack_values": ["101", "9999"]
+      }
+    ],
+    "notes": "Uji perubahan manual terhadap ID yang dikendalikan pengguna, untuk melihat apakah sistem tetap memberikan akses meskipun ID tidak milik user."
+  }
+]
