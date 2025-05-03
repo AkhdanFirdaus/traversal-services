@@ -40,4 +40,4 @@ Directory/Path Traversal
 1. `docker compose build`
 2. `docker compose run engine composer dump-autoload`
 3. `docker compose run engine php run.php https://<git-repo>.git`
-*. cleaning data `rm -rf workspace/* build/ infection-log.txt`
+4. untuk cleaning data `rm -rf workspace/* build/ infection-log.txt`
