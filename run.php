@@ -5,6 +5,7 @@ use Engine\Analyzer;
 use Engine\Detector;
 use Engine\Mutator;
 use Engine\InfectionRunner;
+use Engine\PayloadGenerator;
 use Engine\Reporter;
 use Engine\TestGenerator;
 use Engine\Utils;
@@ -16,6 +17,11 @@ if (!$repoUrl) {
 }
 
 Utils::cloneRepo($repoUrl);
+
+// 1.1. Payloads generation
+$pg = new PayloadGenerator();
+$payloads = $pg->getPayloads();
+Utils::saveReport('1-payload-generation', $payloads);
 
 // 2. Static Analysis
 $results = Analyzer::analyzeSourceCode('./workspace/repo');
