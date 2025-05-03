@@ -36,5 +36,3 @@ $mutationScore = InfectionRunner::run();
 Reporter::generateReport($mutationScore, $vulns);
 
 echo "Flow Completed. Check /workspace/reports/\n";
-
-// rm -rf workspace/* build/ infection-log.txt
