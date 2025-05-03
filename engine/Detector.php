@@ -7,7 +7,49 @@ use PhpParser\Node;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\ParserFactory;
+use PhpParser\PrettyPrinter\Standard;
 use Engine\Utils;
+
+class TraversalVisitor extends NodeVisitorAbstract {
+    private array $patterns;
+    private array $findings = [];
+    
+    public function __construct(array $patterns) {
+        $this->patterns = $patterns;
+    }
+
+    public function enterNode(Node $node) {
+        if ($node instanceof Node\Expr\FuncCall) {
+            $funcName = $node->name instanceof Node\Name ? $node->name->toString() : null;
+            foreach ($node->args as $arg) {
+                $code = $this->prettyPrintExpr($arg->value);
+                foreach ($this->patterns as $patternGroup) {
+                    foreach ($patternGroup['patterns'] as $testPattern) {
+                        if (strpos($code, $testPattern) !== false) {
+                            $this->findings[] = [
+                                'function' => $funcName,
+                                'argument' => $code,
+                                'matched_pattern' => $testPattern,
+                                'cwe' => $patternGroup['cwe'],
+                                'description' => $patternGroup['name'],
+                                'line' => $node->getLine(),
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public function getFindings(): array {
+        return $this->findings;
+    }
+
+    public function prettyPrintExpr(Node $node): string {
+        $printer = new Standard();
+        return $printer->prettyPrintExpr($node);
+    }
+}
 
 
 class Detector {
@@ -33,61 +75,39 @@ class Detector {
 
     public static function detect(array $filePaths): array {
         $vulnerabilities = [];
+        $errors = [];
 
         $parser = (new ParserFactory())->createForNewestSupportedVersion();
+        
+        $visitor = new TraversalVisitor(self::loadPatterns());
+        $traverser = new NodeTraverser();
+        $traverser->addVisitor($visitor);
 
         foreach ($filePaths as $filePath) {
+            $code = file_get_contents($filePath);
+            
             try {
-                $code = file_get_contents($filePath);
                 $ast = $parser->parse($code);
-
-                $traverser = new NodeTraverser();
-                $visitor = new class extends NodeVisitorAbstract {
-                    public array $risks = [];
-                    public function enterNode(Node $node) {
-                        if ($node instanceof Node\Expr\Include_
-                            || $node instanceof Node\Expr\Eval_
-                            || $node instanceof Node\Expr\FuncCall
-                            && in_array($node->name, ['file_get_contents', 'fopen'])) {
-                        } {
-                            if ($node->expr instanceof Node\Expr\ArrayDimFetch) {
-                                $var = $node->expr->var;
-                                if ($var instanceof Node\Expr\Variable && in_array($var->name, ['_GET', '_POST', '_REQUEST'])) {
-                                    $this->risks[] = [
-                                        'line' => $node->getStartLine(),
-                                        'type' => 'Traversal Risk: ' . get_class($node),
-                                        'input' => $var->name,
-                                        'raw' => $node->expr,
-                                        'message' => 'Potential traversal risk detected.'
-                                    ];
-                                }
-                            }
-                        }
-                    }
-                };
-
-                $traverser->addVisitor(($visitor));
                 $traverser->traverse($ast);
 
-                if (!empty($visitor->risks)) {
+                if (!empty($visitor->getFindings())) {
                     $vulnerabilities[] = [
                         'file' => $filePath,
-                        'risks' => $visitor->risks
+                        'findings' => $visitor->getFindings(),
                     ];
                 }
             } catch (\PhpParser\Error $e) {
-                Utils::saveReport('error', [
+                $errors[] = [
                     'file' => $filePath,
                     'error' => $e->getMessage()
-                ]);
-            } catch (Error $e) {
-                Utils::saveReport('error', [
-                    'file' => $filePath,
-                    'error' => $e->getMessage()
-                ]);
+                ];
             }
         }
 
+        if (!empty($errors)) {
+            Utils::saveReport('errors', $errors);
+        }
+        
         return $vulnerabilities;
     }
 }

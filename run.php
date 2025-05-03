@@ -25,20 +25,20 @@ Utils::saveReport('2-analyze', $results);
 $vulns = Detector::detect($results);
 Utils::saveReport('3-detector', $vulns);
 
-// 4. Mutate
-Mutator::mutateVulnerableFiles($vulns);
-// Utils::saveReport('4-mutator', $results);
+// // 4. Mutate
+// Mutator::mutateVulnerableFiles($vulns);
+// // Utils::saveReport('4-mutator', $results);
 
-// 5. Generate Test Cases
-TestGenerator::generateTestCases($vulns);
-// Utils::saveReport('5-testgen', $results);
+// // 5. Generate Test Cases
+// TestGenerator::generateTestCases($vulns);
+// // Utils::saveReport('5-testgen', $results);
 
-// 6. Run Infection
-$mutationScore = InfectionRunner::run();
-// Utils::saveReport('6-infection', $results);
+// // 6. Run Infection
+// $mutationScore = InfectionRunner::run();
+// // Utils::saveReport('6-infection', $results);
 
-// 7. Generate Report
-Reporter::generateReport($mutationScore, $vulns);
-// Utils::saveReport('7-report', $results);
+// // 7. Generate Report
+// Reporter::generateReport($mutationScore, $vulns);
+// // Utils::saveReport('7-report', $results);
 
 echo "Flow Completed. Check /workspace/reports/\n";

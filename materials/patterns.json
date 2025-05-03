@@ -2,61 +2,61 @@
   {
     "cwe": "CWE-22",
     "name": "Basic Path Traversal",
-    "pattern": ["../", "..\\"],
+    "patterns": ["../", "..\\"],
     "encoding": "none",
     "notes": ""
   },
   {
     "cwe": "CWE-23",
     "name": "Relative Path Traversal",
-    "pattern": ["../../", "..\\..\\", "../.."],
+    "patterns": ["../../", "..\\..\\", "../.."],
     "encoding": "none",
     "notes": ""
   },
   {
     "cwe": "CWE-24",
     "name": "Traversal to Specific Directory",
-    "pattern": ["../admin", "../config"],
+    "patterns": ["../admin", "../config"],
     "encoding": "none",
     "notes": ""
   },
   {
     "cwe": "CWE-25",
     "name": "Absolute Path",
-    "pattern": ["/etc/passwd", "C:\\Windows\\System32\\drivers\\etc\\hosts"],
+    "patterns": ["/etc/passwd", "C:\\Windows\\System32\\drivers\\etc\\hosts"],
     "encoding": "none",
     "notes": ""
   },
   {
     "cwe": "CWE-26",
     "name": "Obfuscated Traversal",
-    "pattern": [".../...//", "...\\...\\\\"],
+    "patterns": [".../...//", "...\\...\\\\"],
     "encoding": "none",
     "notes": ""
   },
   {
     "cwe": "CWE-27",
     "name": "Folder Up One Level",
-    "pattern": ["images/..", "uploads/.."],
+    "patterns": ["images/..", "uploads/.."],
     "encoding": "none",
     "notes": ""
   },
   {
     "cwe": "CWE-28",
     "name": "Double Encoded Traversal",
-    "pattern": ["%252e%252e%252f", "%255c%255c"],
+    "patterns": ["%252e%252e%252f", "%255c%255c"],
     "encoding": "double"
   },
   {
     "cwe": "CWE-29",
     "name": "Unicode Traversal",
-    "pattern": ["%u2216%u2216", "%u002e%u002e%u002f"],
+    "patterns": ["%u2216%u2216", "%u002e%u002e%u002f"],
     "encoding": "unicode"
   },
   {
     "cwe": "CWE-30",
     "name": "Null Byte Injection",
-    "pattern": ["%00", "%00.png", "%00.txt"],
+    "patterns": ["%00", "%00.png", "%00.txt"],
     "encoding": "null-byte"
   },
   {
