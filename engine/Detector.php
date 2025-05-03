@@ -11,6 +11,11 @@ use Engine\Utils;
 
 
 class Detector {
+    public static function loadPatterns(): array {
+        $path = __DIR__ . '../../materials/patterns.json';
+        return json_decode(file_get_contents($path), true);
+    }
+
     public static function detectTraversalRisks(array $phpFiles): array {
         $vulns = [];
     
@@ -70,6 +75,11 @@ class Detector {
                         'risks' => $visitor->risks
                     ];
                 }
+            } catch (\PhpParser\Error $e) {
+                Utils::saveReport('error', [
+                    'file' => $filePath,
+                    'error' => $e->getMessage()
+                ]);
             } catch (Error $e) {
                 Utils::saveReport('error', [
                     'file' => $filePath,

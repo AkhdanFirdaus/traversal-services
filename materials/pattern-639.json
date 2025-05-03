@@ -1,0 +1,27 @@
+{
+    "cwe": "CWE-639",
+    "name": "Authorization Bypass via Predictable User ID",
+    "vectors": [
+      {
+        "location": "query",
+        "parameter": "user_id",
+        "attack_values": ["1", "2", "100", "9999"]
+      },
+      {
+        "location": "query",
+        "parameter": "account_id",
+        "attack_values": ["200", "201", "202", "999"]
+      },
+      {
+        "location": "path",
+        "template": "/user/{id}/profile",
+        "attack_values": ["1", "5", "999"]
+      },
+      {
+        "location": "body",
+        "parameter": "target_user_id",
+        "attack_values": ["101", "9999"]
+      }
+    ],
+    "notes": "Uji perubahan manual terhadap ID yang dikendalikan pengguna, untuk melihat apakah sistem tetap memberikan akses meskipun ID tidak milik user."
+  }
