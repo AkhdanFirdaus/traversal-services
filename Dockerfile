@@ -1,19 +1,26 @@
 # use php latest stable image with minimal dependencies
-FROM php:8.4-alpine
+FROM php:8.2-cli
 
 # install dependencies
-RUN apk update && apk add --no-cache git 
-
-# set working directory
-WORKDIR /app
+RUN apt-get update && apt-get install -y \
+    git unzip zip \
+    && rm -rf /var/lib/apt/lists/*
 
 # install composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Install composer dependencies
+# set working directory
+WORKDIR /app
+
+# Copy all files
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p workspace/repo workspace/mutants workspace/generated-tests workspace/reports build
+
+# Install dependencies
 RUN composer install --no-interaction --prefer-dist
 
-# Copy composer files first for caching
-COPY composer.json composer.lock /app/
-COPY .env.example .env
+# Run the application
+# CMD ["php", "run.php"]
 

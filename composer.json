@@ -1,0 +1,17 @@
+{
+    "require": {
+      "phpunit/phpunit": "^10.0"
+    },
+    "require-dev": {
+      "infection/infection": "^0.29"
+    },
+    "config": {
+        "allow-plugins": {
+            "third-party/required-plugin": true,
+            "my-organization/*": true,
+            "unnecessary/plugin": false,
+            "infection/extension-installer": true
+        }
+    }
+  }
+  

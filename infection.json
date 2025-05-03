@@ -1,0 +1,14 @@
+{
+    "source": {
+        "directories": ["workspace/repo"]
+    },
+    "logs": {
+        "text": "infection-log.txt"
+    },
+    "phpUnit": {
+        "customTests": "workspace/generated-tests",
+        "coverage": {
+            "path": "build/coverage"
+        }
+    }
+}

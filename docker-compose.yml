@@ -1,9 +1,7 @@
 services:
-  app:
-    container_name: traversal-services
+  engine:
+    container_name: traversal-engine
     build: .
-    ports:
-      - "8080:8080"
     volumes:
       - .:/app
 
