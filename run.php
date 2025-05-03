@@ -1,11 +1,13 @@
 <?php
-require_once __DIR__ . '/engine/utils.php';
-require_once __DIR__ . '/engine/analyzer.php';
-require_once __DIR__ . '/engine/detector.php';
-require_once __DIR__ . '/engine/mutator.php';
-require_once __DIR__ . '/engine/test_generator.php';
-require_once __DIR__ . '/engine/infection_runner.php';
-require_once __DIR__ . '/engine/reporter.php';
+require_once __DIR__ . '/vendor/autoload.php';
+
+use Engine\Analyzer;
+use Engine\Detector;
+use Engine\Mutator;
+use Engine\InfectionRunner;
+use Engine\Reporter;
+use Engine\TestGenerator;
+use Engine\Utils;
 
 // 1. Git Clone
 $repoUrl = $argv[1] ?? null;
@@ -13,24 +15,26 @@ if (!$repoUrl) {
     die("Usage: php run.php <repository-url>\n");
 }
 
-cloneRepo($repoUrl);
+Utils::cloneRepo($repoUrl);
 
 // 2. Static Analysis
-$results = analyzeSourceCode('./workspace/repo');
+$results = Analyzer::analyzeSourceCode('./workspace/repo');
 
 // 3. Detect Traversal Risks
-$vulns = detectTraversalRisks($results);
+$vulns = Detector::detectTraversalRisks($results);
 
 // 4. Mutate
-mutateVulnerableFiles($vulns);
+Mutator::mutateVulnerableFiles($vulns);
 
 // 5. Generate Test Cases
-generateTestCases($vulns);
+TestGenerator::generateTestCases($vulns);
 
 // 6. Run Infection
-$mutationScore = runInfection();
+$mutationScore = InfectionRunner::run();
 
 // 7. Generate Report
-generateReport($mutationScore, $vulns);
+Reporter::generateReport($mutationScore, $vulns);
 
 echo "Flow Completed. Check /workspace/reports/\n";
+
+// rm -rf workspace/* build/ infection-log.txt

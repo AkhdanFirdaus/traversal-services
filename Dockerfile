@@ -15,12 +15,17 @@ WORKDIR /app
 # Copy all files
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p workspace/repo workspace/mutants workspace/generated-tests workspace/reports build
+# # Install PHP extensions required by PHPUnit & Infection
+# RUN docker-php-ext-install dom mbstring
 
 # Install dependencies
 RUN composer install --no-interaction --prefer-dist
 
-# Run the application
-# CMD ["php", "run.php"]
+RUN chmod +x vendor/bin/phpunit vendor/bin/infection || true
+
+# Prepare necessary directories
+RUN mkdir -p workspace/repo workspace/mutants workspace/generated-tests workspace/reports build
+
+# Default command
+CMD ["php", "run.php"]
 
