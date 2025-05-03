@@ -2,6 +2,7 @@
 
 namespace Engine;
 
+use PhpParser\Error;
 use PhpParser\Node;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
@@ -10,10 +11,10 @@ use PhpParser\PrettyPrinter\Standard;
 use Engine\Utils;
 
 class Detector {
-    private const PATTERN_FILE = __DIR__ . '../../materials/patterns.json';
+    private array $patterns;
 
-    public static function loadPatterns(): array {
-        return json_decode(file_get_contents(self::PATTERN_FILE), true);
+    public function __construct(array $patterns = []) {
+        $this->patterns = $patterns;
     }
 
     public static function detectTraversalRisks(array $phpFiles): array {
@@ -31,13 +32,13 @@ class Detector {
         return $vulns;
     }
 
-    public static function detect(array $filePaths): array {
+    public function detect(array $filePaths): array {
         $vulnerabilities = [];
         $errors = [];
 
         $parser = (new ParserFactory())->createForNewestSupportedVersion();
         
-        $visitor = new TraversalVisitor(self::loadPatterns());
+        $visitor = new TraversalVisitor($this->patterns);
         $traverser = new NodeTraverser();
         $traverser->addVisitor($visitor);
 
@@ -54,7 +55,7 @@ class Detector {
                         'findings' => $visitor->getFindings(),
                     ];
                 }
-            } catch (\PhpParser\Error $e) {
+            } catch (Error $e) {
                 $errors[] = [
                     'file' => $filePath,
                     'error' => $e->getMessage()

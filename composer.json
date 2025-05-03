@@ -1,8 +1,8 @@
 {
   "autoload": {
     "psr-4": {
-      "Engine\\": "engine/",
-      "App\\Mutator\\": "materials/custom-mutators/"
+      "Engine\\": "src/engine/",
+      "App\\Mutator\\": "src/custom-mutators/"
     }
   },
   "require": {

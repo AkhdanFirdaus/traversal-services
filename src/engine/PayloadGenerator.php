@@ -3,7 +3,6 @@
 namespace Engine;
 
 class PayloadGenerator {
-    private const PATTERN_FILE = __DIR__ . '../../materials/patterns.json';
     private const FILE_SAMPLE = [
         'config.php',
         'index.php',
@@ -17,13 +16,13 @@ class PayloadGenerator {
     
     private $patterns = [];
 
-    public function __construct() {
-        $this->patterns = self::generatePatterns();
+    public function __construct(string $dir) {
+        $this->patterns = json_decode(file_get_contents($dir), true);
     }
     
-    public static function generatePatterns(): array {
-        $raw = json_decode(file_get_contents(self::PATTERN_FILE), true);
-        
+    public function generatePatterns(): array {
+        $raw = $this->getOriginalPatterns();
+
         $traversals = [];
 
         foreach ($raw as $entry) {
@@ -38,7 +37,7 @@ class PayloadGenerator {
 
     public function generatePayloads(): array {
         $payloads = [];
-        foreach ($this->patterns as $prefix) {
+        foreach ($this->getPatterns() as $prefix) {
             foreach (self::FILE_SAMPLE as $target) {
                 for ($i=1; $i<=3; $i++) {
                     $step = str_repeat($prefix, $i);
@@ -69,8 +68,12 @@ class PayloadGenerator {
         return $payloads;
     }
 
-    public function getPatterns(): array {
+    public function getOriginalPatterns(): array {
         return $this->patterns;
+    }
+
+    public function getPatterns(): array {
+        return $this->generatePatterns();
     }
 
     public function getPayloads(): array {

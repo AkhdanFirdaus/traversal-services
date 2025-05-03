@@ -1,4 +1,5 @@
 .env
+materials/*
+logs/*
 workspace/*
 vendor/*
-build/*

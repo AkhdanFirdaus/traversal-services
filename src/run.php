@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/vendor/autoload.php';
+require_once '/app/vendor/autoload.php';
 
 use Engine\Analyzer;
 use Engine\Detector;
@@ -19,7 +19,7 @@ if (!$repoUrl) {
 Utils::cloneRepo($repoUrl);
 
 // 1.1. Payloads generation
-$pg = new PayloadGenerator();
+$pg = new PayloadGenerator('/app/materials/patterns.json');
 $payloads = $pg->getPayloads();
 Utils::saveReport('1-payload-generation', $payloads);
 
@@ -28,7 +28,9 @@ $results = Analyzer::analyzeSourceCode('./workspace/repo');
 Utils::saveReport('2-analyze', $results);
 
 // 3. Detect Traversal Risks
-$vulns = Detector::detect($results);
+$patterns = $pg->getOriginalPatterns();
+$detector = new Detector();
+$vulns = $detector->detect($results);
 Utils::saveReport('3-detector', $vulns);
 
 // // 4. Mutate

@@ -2,6 +2,10 @@ services:
   engine:
     container_name: traversal-engine
     build: .
+    ports:
+      - 8080:8080
     volumes:
-      - .:/app
-
+      - ./src:/app/src
+      - ./materials:/app/materials
+      - ./logs:/app/workspace/reports
+      - ./vendor:/app/vendor
