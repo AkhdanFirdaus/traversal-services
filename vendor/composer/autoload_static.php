@@ -11,12 +11,20 @@ class ComposerStaticInit8fb0d2d4bfeff6e217e1ea1c990bf54a
         array (
             'Engine\\' => 7,
         ),
+        'C' => 
+        array (
+            'CustomMutator\\' => 14,
+        ),
     );
 
     public static $prefixDirsPsr4 = array (
         'Engine\\' => 
         array (
             0 => __DIR__ . '/../..' . '/engine',
+        ),
+        'CustomMutator\\' => 
+        array (
+            0 => __DIR__ . '/../..' . '/materials/custom-mutators',
         ),
     );
 

@@ -7,4 +7,5 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'Engine\\' => array($baseDir . '/engine'),
+    'CustomMutator\\' => array($baseDir . '/materials/custom-mutators'),
 );
