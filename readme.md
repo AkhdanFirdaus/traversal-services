@@ -11,17 +11,29 @@ Directory/Path Traversal
 
 ## Engine Flow
 > [Git Clone] 
+>
 >    ↓
+>
 > [Static Code Analyzer] 
+>
 >    ↓
+>
 > [Detect Directory Traversal Risks] 
+>
 >    ↓
+>
 > [Mutate Vulnerable Code] 
+>
 >    ↓
+>
 > [Generate Secure Test Case] 
+>
 >    ↓
+>
 > [Run Mutation Testing]
+>
 >    ↓
+>
 > [Calculate Score + Generate Report]
 
 ## Usage
