@@ -24,7 +24,7 @@ RUN composer install --no-interaction --prefer-dist
 RUN chmod +x vendor/bin/phpunit vendor/bin/infection || true
 
 # Prepare necessary directories
-RUN mkdir -p workspace/repo workspace/mutants workspace/generated-tests workspace/reports build
+RUN mkdir -p workspace/repo workspace/mutants workspace/generated-tests workspace/reports build vendor
 
 # Default command
 CMD ["php", "run.php"]
