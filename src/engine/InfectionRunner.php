@@ -1,6 +1,6 @@
 <?php
 
-namespace Engine;
+namespace App\Engine;
 
 class InfectionRunner {
     public static function run(): float {

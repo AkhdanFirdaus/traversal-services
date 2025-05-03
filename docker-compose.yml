@@ -7,4 +7,3 @@ services:
       - ./materials:/app/materials
       - ./logs:/app/workspace/reports
       - ./vendor:/app/vendor
-      - ./composer.json:/app/composer.json

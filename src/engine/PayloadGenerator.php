@@ -1,6 +1,6 @@
 <?php
 
-namespace Engine;
+namespace App\Engine;
 
 class PayloadGenerator {
     private const FILE_SAMPLE = [

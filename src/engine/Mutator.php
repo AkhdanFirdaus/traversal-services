@@ -1,6 +1,6 @@
 <?php
 
-namespace Engine;
+namespace App\Engine;
 
 class Mutator {
     public static function mutateVulnerableFiles(array $vulns): void {

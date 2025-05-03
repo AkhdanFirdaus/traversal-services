@@ -1,6 +1,6 @@
 <?php
 
-namespace Engine;
+namespace App\Engine;
 
 class Analyzer {
     public static function analyzeSourceCode(string $dir): array {

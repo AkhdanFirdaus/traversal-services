@@ -1,6 +1,6 @@
 <?php
 
-namespace Engine;
+namespace App\Engine;
 
 class TestGenerator {
     public static function generateTestCases(array $vulns): void {
