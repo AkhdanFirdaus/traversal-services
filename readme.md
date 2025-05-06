@@ -38,8 +38,9 @@ Directory/Path Traversal
 
 ## Usage
 1. `docker compose build`
-2. `docker compose run engine composer dump-autoload`
-3. `docker compose run engine php run.php https://<git-repo>.git`
+2. `docker compose run -it engine /bin/bash`
+2. `php src/run.`
+3. direct `docker compose run engine php run.php https://<git-repo>.git`
 4. untuk cleaning data `rm -rf workspace/* build/ infection-log.txt`
 
 ## Vulnerability repo samples

@@ -1,5 +1,6 @@
 .env
 materials/*
-logs/*
 workspace/*
 vendor/*
+engine-logs/*
+socket-logs/*

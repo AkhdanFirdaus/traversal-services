@@ -2,8 +2,30 @@ services:
   engine:
     container_name: traversal-engine
     build: .
+    command: ['php', '/app/run.php']
     volumes:
       - ./src:/app/src
       - ./materials:/app/materials
-      - ./logs:/app/workspace/reports
+      - ./engine-logs:/app/workspace/reports
       - ./vendor:/app/vendor
+    environment:
+      - APP_ENV=development
+
+  socketio:
+    container_name: traversal-socketio
+    build: .
+    command: ["php", "/app/server.php", "start"] 
+    volumes:
+      - ./src:/app/src
+      - ./vendor:/app/vendor
+      - ./socket-logs:/app/logs 
+    ports:
+      - "2021:2021"
+    environment:
+      - APP_ENV=development
+    depends_on:
+      - engine
+
+volumes:
+  socket-logs:
+  engine-logs:
