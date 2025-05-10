@@ -20,7 +20,7 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 
 # install event
 RUN pecl install event \
-    && docker-php-ext-enable event
+    && docker-php-ext-enable --ini-name zz-event.ini event
 
 # install xdebug
 RUN pecl install xdebug \
