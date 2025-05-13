@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Engine;
+namespace App\Pipeline;
 
 class Reporter {
     public static function generateReport(float $score, array $vulns): void {

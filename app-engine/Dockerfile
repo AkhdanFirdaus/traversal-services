@@ -44,12 +44,7 @@ RUN mkdir -p \
     workspace/mutants \
     workspace/generated-tests \
     workspace/reports \
-    engine-logs \
-    socket-logs \
     vendor
-
-RUN touch socket-logs/socketio.log \ 
-    && touch socket-logs/socketio-debug.log
 
 # Ensure bin scripts are executable
 RUN chmod +x vendor/bin/phpunit vendor/bin/infection || true

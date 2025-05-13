@@ -1,13 +1,12 @@
 services:
   engine:
     container_name: traversal-engine
-    build: .
-    command: ['php', '/app/run.php']
+    build: ./app-engine
+    command: ['php', 'run.php']
     volumes:
-      - ./src:/app/src
-      - ./materials:/app/materials
-      - ./engine-logs:/app/workspace/reports
-      - ./vendor:/app/vendor
+      - ./app-engine/src:/app
+      - ./app-engine/vendor:/app/vendor
+      - ./logs:/app/workspace/reports
     environment:
       - APP_ENV=development
     networks:
@@ -15,14 +14,12 @@ services:
 
   socketio:
     container_name: traversal-socketio
-    build: .
-    command: ["php", "/app/server.php", "start"] 
+    build: ./app-server
     volumes:
-      - ./src:/app/src
-      - ./vendor:/app/vendor
-      - ./socket-logs:/app/logs 
+      - ./app-server:/app
+      - ./app-server/node_modules:/app/node_modules
     ports:
-      - "2021:2021"
+      - "3000:3000"
     environment:
       - APP_ENV=development
     depends_on:
@@ -34,5 +31,4 @@ networks:
   traversal:
 
 volumes:
-  socket-logs:
-  engine-logs:
+  logs:

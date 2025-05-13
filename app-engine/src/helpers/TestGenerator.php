@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Engine;
+namespace App\Helpers;
 
-class TestGenerator {
+class DummyGenerator {
     public static function generateTestCases(array $vulns): void {
         $testDir = './workspace/generated-tests';
         if (!is_dir($testDir)) mkdir($testDir, 0777, true);

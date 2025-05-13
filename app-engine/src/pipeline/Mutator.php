@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Engine;
+namespace App\Pipeline;
 
 class Mutator {
     public static function mutateVulnerableFiles(array $vulns): void {

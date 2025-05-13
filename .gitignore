@@ -1,6 +1,10 @@
+app-engine/workspace
+app-engine/vendor
+app-engine/*lock.json
+
+app-server/node_modules
+app-server/*lock.json
+
+materials
+logs
 .env
-materials/*
-workspace/*
-vendor/*
-engine-logs/*
-socket-logs/*

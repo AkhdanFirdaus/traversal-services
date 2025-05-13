@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Engine;
+namespace App\Helpers;
 
 class Utils {
     public static function getCurrentTimestamp(): string {

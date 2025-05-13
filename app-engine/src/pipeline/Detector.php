@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Engine;
+namespace App\Pipeline;
 
 use PhpParser\Error;
 use PhpParser\Node;
@@ -8,7 +8,7 @@ use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\ParserFactory;
 use PhpParser\PrettyPrinter\Standard;
-use App\Engine\Utils;
+use App\Helpers\Utils;
 
 class Detector {
     private array $patterns;

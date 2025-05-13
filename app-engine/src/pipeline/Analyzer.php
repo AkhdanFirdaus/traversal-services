@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Engine;
+namespace App\Pipeline;
 
 use PhpParser\ParserFactory;
 use PhpParser\NodeTraverser;

@@ -1,14 +1,15 @@
 <?php
-namespace App;
 
-use App\Engine\Analyzer;
-use App\Engine\Detector;
-use App\Engine\Mutator;
-use App\Engine\InfectionRunner;
-use App\Engine\PayloadGenerator;
-use App\Engine\Reporter;
-use App\Engine\TestGenerator;
-use App\Engine\Utils;
+require_once '/app/vendor/autoload.php';
+
+use App\Pipeline\Analyzer;
+use App\Pipeline\Detector;
+use App\Pipeline\Mutator;
+use App\Pipeline\InfectionRunner;
+use App\Pipeline\PayloadGenerator;
+use App\Pipeline\Reporter;
+use App\Pipeline\TestGenerator;
+use App\Helpers\Utils;
 
 class Main {
     public static function run(array $argv): void {
@@ -54,3 +55,5 @@ class Main {
         echo "Flow Completed. Check /workspace/reports/\n";
     }
 }
+
+Main::run($argv);

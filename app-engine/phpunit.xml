@@ -7,8 +7,8 @@
     </testsuites>
     <coverage>
         <report>
-            <clover outputFile="build/logs/clover.xml"/>
-            <html outputDirectory="build/coverage"/>
+            <clover outputFile="../logs/clover.xml"/>
+            <html outputDirectory="../logs/coverage"/>
         </report>
     </coverage>
 </phpunit>
