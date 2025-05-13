@@ -36,12 +36,19 @@ Directory/Path Traversal
 >
 > [Calculate Score + Generate Report]
 
-## Usage
+## Usage Socket
+1. `docker compose run -it socket /bin/bash`
+2. `php src/server.php`
+
+## Usage Engine
 1. `docker compose build`
 2. `docker compose run -it engine /bin/bash`
-2. `php src/run.`
+2. `php src/run.php`
 3. direct `docker compose run engine php run.php https://<git-repo>.git`
 4. untuk cleaning data `rm -rf workspace/* build/ infection-log.txt`
 
 ## Vulnerability repo samples
 1. https://github.com/opsxcq/exploit-CVE-2016-10033.git
+
+## Parameter
+1. 

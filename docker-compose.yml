@@ -10,6 +10,8 @@ services:
       - ./vendor:/app/vendor
     environment:
       - APP_ENV=development
+    networks:
+      - traversal
 
   socketio:
     container_name: traversal-socketio
@@ -25,6 +27,11 @@ services:
       - APP_ENV=development
     depends_on:
       - engine
+    networks:
+      - traversal
+
+networks:
+  traversal:
 
 volumes:
   socket-logs:
