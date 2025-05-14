@@ -1,4 +1,7 @@
 <?php
+
+use App\Main;
+
 $method = $_SERVER['REQUEST_METHOD'];
 $request = explode('/', trim($_SERVER['REQUEST_URI'], '/'));
 
@@ -15,8 +18,12 @@ if ($request[0] === 'analyze') {
             $input = json_decode(file_get_contents('php://input'), true);
             if (isset($input['url'])) {
                 $gitUrl = escapeshellarg($input['url']);
+
+                $result = Main::runApi($gitUrl);
+
                 echo json_encode([
                     "message" => "Url identified: " . $gitUrl, 
+                    "result" => $result,
                     "status" => 'success',
                 ]);
             } else {

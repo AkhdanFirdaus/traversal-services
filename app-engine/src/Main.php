@@ -8,13 +8,8 @@ use App\pipeline\Detector;
 use App\pipeline\PayloadGenerator;
 
 class Main {
-    public static function run(string $repoUrl): void {
+    public static function pipeline(string $repoUrl): array {
         // 0.1. Git Clone
-        
-        if (!$repoUrl) {
-            die("Usage: php run.php <repository-url>\n");
-        }
-
         Utils::cloneRepo($repoUrl);
 
         // 0.2 Payloads generation
@@ -24,7 +19,7 @@ class Main {
 
         // 1 Static Analysis
         $results = Analyzer::analyzeSourceCode('./workspace/repo');
-        Utils::saveReport('2-analyze', $results);
+        $reportBefore = Utils::saveReport('2-analyze', $results);
 
         // 2. Running Infection (Before)
 
@@ -33,7 +28,7 @@ class Main {
         $patterns = $pg->getOriginalPatterns();
         $detector = new Detector($patterns);
         $vulns = $detector->detect($results);
-        Utils::saveReport('3-detector', $vulns);
+        $reportAfter = Utils::saveReport('3-detector', $vulns);
 
         // // 4. Mutate
         // Mutator::mutateVulnerableFiles($vulns);
@@ -52,7 +47,26 @@ class Main {
         // Report 1:
         // Report 2:
         // // Utils::saveReport('7-report', $results);
+        
+        return [
+            'report-before' => $reportBefore,
+            'report-after' => $reportAfter,
+            'zip-path' => $reportAfter,
+        ];
+    }
+    
+    public static function run(string $repoUrl): void {
+        if (!$repoUrl) {
+            die("Usage: php run.php <repository-url>\n");
+        }
+
+        self::pipeline($repoUrl);
 
         echo "Flow Completed. Check /workspace/reports/\n";
+    }
+
+    public static function runApi(string $repoUrl): array {
+        $result = self::pipeline($repoUrl);
+        return $result;
     }
 }

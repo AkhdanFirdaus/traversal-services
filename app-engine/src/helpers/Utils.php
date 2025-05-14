@@ -23,7 +23,7 @@ class Utils {
         exec("git clone $url $targetDir");
     }
 
-    public static function saveReport(string $stepName, $content): void {
+    public static function saveReport(string $stepName, $content): string {
         $reportDir = './workspace/reports/';
         if (!is_dir($reportDir)) {
             mkdir($reportDir, 0777, true);
@@ -31,5 +31,6 @@ class Utils {
         $filePath = "$reportDir/{$stepName}.json";
         file_put_contents($filePath, json_encode($content, JSON_PRETTY_PRINT));
         echo "Report saved to $filePath\n";
+        return $filePath;
     }
 }
