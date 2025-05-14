@@ -1,15 +1,11 @@
 <?php
 
-require_once '/app/vendor/autoload.php';
+namespace App;
 
-use App\Pipeline\Analyzer;
-use App\Pipeline\Detector;
-use App\Pipeline\Mutator;
-use App\Pipeline\InfectionRunner;
-use App\Pipeline\PayloadGenerator;
-use App\Pipeline\Reporter;
-use App\Pipeline\TestGenerator;
-use App\Helpers\Utils;
+use App\helpers\Utils;
+use App\pipeline\Analyzer;
+use App\pipeline\Detector;
+use App\pipeline\PayloadGenerator;
 
 class Main {
     public static function run(array $argv): void {
@@ -22,7 +18,7 @@ class Main {
         Utils::cloneRepo($repoUrl);
 
         // 1.1. Payloads generation
-        $pg = new PayloadGenerator('/app/materials/patterns.json');
+        $pg = new PayloadGenerator('/app/src/patterns/patterns.json');
         $payloads = $pg->getPayloads();
         Utils::saveReport('1-payload-generation', $payloads);
 
@@ -55,5 +51,3 @@ class Main {
         echo "Flow Completed. Check /workspace/reports/\n";
     }
 }
-
-Main::run($argv);

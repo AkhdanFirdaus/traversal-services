@@ -7,4 +7,6 @@ app-server/*lock.json
 
 materials
 logs
+workspace
+
 .env
