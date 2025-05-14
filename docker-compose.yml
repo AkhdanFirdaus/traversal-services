@@ -6,8 +6,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./workspace:/app/workspace/reports
       - ./app-engine/src:/app/src
+      - ./workspace:/app/workspace/reports
     environment:
       - APP_ENV=development
     networks:
@@ -17,7 +17,7 @@ services:
     container_name: traversal-socketio
     build: ./app-server
     volumes:
-      - ./app-server:/app
+      - ./app-server/src:/app/src
       - ./logs:/app/logs
     ports:
       - "3000:3000"
