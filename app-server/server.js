@@ -1,12 +1,11 @@
 require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
-const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
 
-const reportPath = path.resolve('/app/logs/final_report.json');
+const { generateTestCase } = require('./ai/aiAdapter');
+const axios = require('axios');
 
 const app = express();
 const server = http.createServer(app);
@@ -23,11 +22,21 @@ io.on('connection', (socket) => {
 
   socket.on('analyze_repo', async (gitUrl) => {
     console.log("Analyzing repo: " + gitUrl);
-    const jobId = Date.now();
     try {
-      const request = await fetch('http://0.0.0.0:8080/analyze', {url: gitUrl})
-      const response = await request.json();
-      socket.emit('message', response);
+      const request = await axios.post('http://0.0.0.0:8080/analyze', {
+        url: gitUrl,
+      });
+
+      const openai = await generateTestCase('openai', request.data)
+      const anthropic = await generateTestCase('anthropic', request.data)
+      const gemini = await generateTestCase('gemini', request.data)
+
+      socket.emit('message', {
+        openai,
+        anthropic,
+        gemini,
+      });
+
     } catch (error) {
       socket.emit('message', {error: error.message});
     }
