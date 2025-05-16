@@ -44,3 +44,5 @@ Directory/Path Traversal
 
 ## Vulnerability repo samples
 1. https://github.com/opsxcq/exploit-CVE-2016-10033.git
+2. [https://github.com/poohia/testUnitLesson/blob/main/tests/ApiTest.php](https://github.com/poohia/testUnitLesson.git)
+3. https://github.com/ProgrammerZamanNow/belajar-php-unit-test.git
