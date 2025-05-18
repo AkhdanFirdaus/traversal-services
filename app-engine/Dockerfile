@@ -11,12 +11,7 @@ RUN apt-get update && apt-get install -y \
     
 # # Install PHP extensions required by PHPUnit & Infection
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd \
-    zip \
-    xml \
-    mbstring \
-    sockets \
-    pcntl
+    && docker-php-ext-install -j$(nproc) gd zip xml mbstring sockets pcntl
 
 # install event
 RUN pecl install event \

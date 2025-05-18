@@ -7,7 +7,8 @@ services:
       - "8080:8080"
     volumes:
       - ./app-engine/src:/app/src
-      - ./workspace:/app/workspace/reports
+      - ./workspace:/app/workspace
+      - ./logs/engine:/app/logs
     environment:
       - APP_ENV=development
     networks:
@@ -18,7 +19,7 @@ services:
     build: ./app-server
     volumes:
       - ./app-server/src:/app/src
-      - ./logs:/app/logs
+      - ./logs/server:/app/logs
     ports:
       - "3000:3000"
     environment:

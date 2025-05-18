@@ -4,8 +4,8 @@ namespace App\Pipeline;
 
 class InfectionRunner {
     public static function run(): float {
-        exec('vendor/bin/phpunit --coverage-xml=build/coverage', $out1);
-        exec('vendor/bin/infection --coverage=build/coverage --threads=2 --only-covered', $out2);
+        exec('vendor/bin/phpunit --testdox', $out1);
+        exec('vendor/bin/infection', $out2);
     
         foreach ($out2 as $line) {
             if (preg_match('/Mutation Score Indicator.*?(\d+(\.\d+)?)/', $line, $match)) {

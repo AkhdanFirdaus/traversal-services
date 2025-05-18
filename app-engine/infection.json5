@@ -9,9 +9,9 @@
     },
     "timeout": 10,
     "logs": {
-        "text": "infection.log",
-        "html": "infection.html",
-        "summary": "summary.log"
+        "text": "logs/infection.log",
+        "html": "logs/infection.html",
+        "summary": "logs/summary.log"
     },
     "phpUnit": {
         "configDir": "."
@@ -44,6 +44,7 @@
         "App\\Mutator\\OP_ExAP_ToTrue": true,
         "App\\Mutator\\OP_ExFP_ToTrue": true,
         "App\\Mutator\\OP_ExPer_ToTrue": true,
-        "App\\Mutator\\OP_ExReF_ToTrue": true
+        "App\\Mutator\\OP_ExReF_ToTrue": true,
+        "App\\Mutator\\Heuristics\\RemoveSanitization": true
     },
 }

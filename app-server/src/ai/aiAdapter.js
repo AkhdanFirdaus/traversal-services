@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const axios = require('axios');
+const OpenAI = require('openai');
 
 const { buildTestPrompt } = require('./prompts');
 
@@ -19,12 +20,15 @@ const HEADERS = {
 };
 
 async function askOpenAI(prompt) {
-  const res = await axios.post('https://api.openai.com/v1/chat/completions', {
-    model: 'gpt-4-1106-preview',
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.3
-  }, { headers: HEADERS.openai });
-  return res.data.choices[0].message.content.trim();
+  const client = new OpenAI({
+    apiKey: process.env['OPENAI_API_KEY'],
+  });
+  const res = await client.responses.create({
+    model: 'gpt-4o',
+    instructions: prompt,
+    input: 'You are a security-focused AI assistant. Given the following PHP vulnerability context, generate a PHPUnit-compatible test case that attempts to exploit or validate the identified issue.',
+  });
+  return res.output_text;
 }
 
 async function askAnthropic(prompt) {
