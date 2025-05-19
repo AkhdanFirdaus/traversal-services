@@ -10,31 +10,19 @@
 Directory/Path Traversal
 
 ## Engine Flow
-> [Git Clone] 
->
->    ↓
->
-> [Static Code Analyzer] 
->
->    ↓
->
-> [Detect Directory Traversal Risks] 
->
->    ↓
->
-> [Mutate Vulnerable Code] 
->
->    ↓
->
-> [Generate Secure Test Case] 
->
->    ↓
->
-> [Run Mutation Testing]
->
->    ↓
->
-> [Calculate Score + Generate Report]
+> [ Clone Repo ]
+>        ↓
+> [ Heuristic Analysis ]
+>        ↓
+> [ Run Infection #1 ] → (MSI_before)
+>        ↓
+> [ AI Agent Generates Tests (for flagged code) ]
+>        ↓
+> [ Run Infection #2 ] → (MSI_after)
+>        ↓
+> [ Compare MSI ] → [ Select Best Tests ]
+>        ↓
+> [ Package & Deliver Results ]
 
 ## Usage Socket
 1. `docker compose run -it socket /bin/bash`

@@ -23,8 +23,8 @@ class Utils {
         exec("git clone $url $targetDir");
     }
 
-    public static function saveReport(string $stepName, $content): string {
-        $reportDir = './workspace/reports/';
+    public static function log(string $stepName, $content): string {
+        $reportDir = './logs/engine';
         if (!is_dir($reportDir)) {
             mkdir($reportDir, 0777, true);
         }
