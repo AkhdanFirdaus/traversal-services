@@ -14,11 +14,7 @@
         "summary": "logs/summary.log"
     },
     "phpUnit": {
-        "configDir": "."
-        "customTests": "workspace/generated-tests",
-        "coverage": {
-            "path": "build/coverage"
-        }
+        "configDir": ".",
     },
     "mutators": {
         "@default": true,
@@ -44,7 +40,6 @@
         "App\\Mutator\\OP_ExAP_ToTrue": true,
         "App\\Mutator\\OP_ExFP_ToTrue": true,
         "App\\Mutator\\OP_ExPer_ToTrue": true,
-        "App\\Mutator\\OP_ExReF_ToTrue": true,
-        "App\\Mutator\\Heuristics\\RemoveSanitization": true
-    },
+        "App\\Mutator\\OP_ExReF_ToTrue": true
+    }
 }

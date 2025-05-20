@@ -2,7 +2,7 @@
 <phpunit bootstrap="vendor/autoload.php" executionOrder="random" resolveDependencies="true" colors="true" verbose="true">
     <testsuites>
         <testsuite name="Generated Tests">
-            <directory>workspace/generated-tests</directory>
+            <directory>workspace/repo</directory>
         </testsuite>
     </testsuites>
     <coverage>

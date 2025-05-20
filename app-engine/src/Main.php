@@ -5,7 +5,7 @@ namespace App;
 use App\helpers\Utils;
 use App\pipeline\Analyzer;
 use App\pipeline\Detector;
-use App\Pipeline\InfectionRunner;
+use App\pipeline\InfectionRunner;
 use App\pipeline\PayloadGenerator;
 
 class Main {
@@ -19,18 +19,18 @@ class Main {
         Utils::saveReport('1-payload-generation', $payloads);
 
         // 1. Scanning
-        $results = Analyzer::analyzeTestCases('/app/workspace/repo');
+        $results = Analyzer::analyzeSourceCode('/app/workspace/repo');
         $reportBefore = Utils::saveReport('1-analyze', $results);
 
-        // // 2. Running Infection (Before)
-        // $mutationScore = InfectionRunner::run();
-        // $reportBefore = Utils::saveReport('2-infection', $mutationScore);
+        // 2. Running Infection (Before)
+        $mutationScore = InfectionRunner::run2();
+        $reportBefore = Utils::saveReport('2-infection', $mutationScore);
 
-        // // 3. Detect Traversal Risks
-        // $patterns = $pg->getOriginalPatterns();
-        // $detector = new Detector($patterns);
-        // $vulns = $detector->detect($results);
-        // $reportAfter = Utils::saveReport('3-detector', $vulns);
+        // 3. Detect Traversal Risks
+        $patterns = $pg->getOriginalPatterns();
+        $detector = new Detector($patterns);
+        $vulns = $detector->detect($results);
+        $reportAfter = Utils::saveReport('3-detector', $vulns);
 
         // // 4. Mutate
         // Mutator::mutateVulnerableFiles($vulns);
