@@ -1,26 +1,28 @@
 services:
   engine:
     container_name: traversal-engine
-    build: ./app-engine
+    build: ./engine
     command: ['php', '-S', "0.0.0.0:8080", "/app/public/server.php"]
     ports:
       - "8080:8080"
     volumes:
-      - ./app-engine/src:/app/src
-      - ./app-engine/bin:/app/bin
-      - ./app-engine/public:/app/public
+      - ./engine/src:/app/src
+      - ./engine/bin:/app/bin
+      - ./engine/public:/app/public
       - ./tmp:/app/tmp
       - ./reports/engine:/app/reports
     env_file:
-      - ./app-engine/.env
+      - .env
+    environment:
+      - APP_ENV_LOADER=docker-compose
     networks:
       - traversal
 
-  socketio:
-    container_name: traversal-socketio
-    build: ./app-server
+  server:
+    container_name: traversal-server
+    build: ./server
     volumes:
-      - ./app-server/src:/app/src
+      - ./server/src:/app/src
       - ./logs/server:/app/logs
     ports:
       - "3000:3000"
