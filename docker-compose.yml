@@ -15,6 +15,7 @@ services:
       - .env
     environment:
       - APP_ENV_LOADER=docker-compose
+      - TZ=Asia/Jakarta
     networks:
       - traversal
 
@@ -28,6 +29,7 @@ services:
       - "3000:3000"
     environment:
       - APP_ENV=development
+      - TZ=Asia/Jakarta
     depends_on:
       - engine
     networks:

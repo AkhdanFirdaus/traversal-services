@@ -10,10 +10,12 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use App\AppService;
 use App\Utils\Logger;
 use App\Utils\PatternLoader;
-use App\Utils\FileHelper;
+// use App\Utils\FileHelper; // Tidak secara langsung digunakan di sini lagi
 use GuzzleHttp\Client as HttpClient;
 use Dotenv\Dotenv;
+use Psr\Log\LogLevel;
 
+// --- Muat Variabel Environment ---
 $isDockerManagedEnv = (getenv('APP_ENV_LOADER') === 'docker-compose');
 
 if (!$isDockerManagedEnv) {
@@ -38,27 +40,49 @@ if (!$isDockerManagedEnv) {
 }
 
 // --- Konfigurasi dari Environment Variables ---
-$logFilePath = $_ENV['LOG_PATH'] ?? __DIR__ . '/../tmp/app.log';
+$logFilePath = $_ENV['LOG_PATH'] ?? __DIR__ . '/../tmp/app_cli.log';
 $logLevelName = strtoupper($_ENV['LOG_LEVEL'] ?? 'INFO');
 $logLevel = match ($logLevelName) {
     'DEBUG' => Logger::DEBUG, 'WARNING' => Logger::WARNING, 'ERROR' => Logger::ERROR, default => Logger::INFO,
 };
 $patternsJsonPath = $_ENV['PATTERNS_JSON_PATH'] ?? __DIR__ . '/../config/patterns.json';
-$baseCloneDir = $_ENV['BASE_CLONE_DIR'] ?? __DIR__ . '/../tmp/clones';
-$baseExportDir = $_ENV['BASE_EXPORT_DIR'] ?? __DIR__ . '/../reports/exported_test_cases';
-$reportsDir = $_ENV['REPORTS_DIR'] ?? __DIR__ . '/../reports';
-$llmApiKey = $_ENV['LLM_API_KEY'] ?? '';
-$llmModelName = $_ENV['LLM_MODEL_NAME'] ?? 'gemini-2.0-flash';
+$baseCloneDir = $_ENV['BASE_CLONE_DIR_CLI'] ?? $_ENV['BASE_CLONE_DIR'] ?? __DIR__ . '/../tmp/clones_cli';
+$baseExportDir = $_ENV['BASE_EXPORT_DIR_CLI'] ?? $_ENV['BASE_EXPORT_DIR'] ?? __DIR__ . '/../reports/exported_test_cases_cli';
+$reportsDir = $_ENV['REPORTS_DIR_CLI'] ?? $_ENV['REPORTS_DIR'] ?? __DIR__ . '/../reports';
+
+// Konfigurasi LLM
+$llmPreferenceOrder = $_ENV['LLM_PREFERENCE_ORDER'] ?? 'gemini,openai,anthropic';
+$llmConfigs = [
+    'gemini' => ['api_key' => $_ENV['GEMINI_API_KEY'] ?? null, 'model_name' => $_ENV['GEMINI_MODEL_NAME'] ?? 'gemini-1.5-flash-latest'],
+    'openai' => ['api_key' => $_ENV['OPENAI_API_KEY'] ?? null, 'model_name' => $_ENV['OPENAI_MODEL_NAME'] ?? 'gpt-3.5-turbo'],
+    'anthropic' => ['api_key' => $_ENV['ANTHROPIC_API_KEY'] ?? null, 'model_name' => $_ENV['ANTHROPIC_MODEL_NAME'] ?? 'claude-3-haiku-20240307', 'api_version' => $_ENV['ANTHROPIC_API_VERSION'] ?? '2023-06-01'],
+];
+
+// Konfigurasi Socket.IO
+$socketIoServerUrl = $_ENV['SOCKET_IO_SERVER_URL'] ?? null;
+$socketIoProgressEvent = $_ENV['SOCKET_IO_PROGRESS_EVENT'] ?? 'pipeline_progress';
+
 
 // --- Inisialisasi Komponen ---
-$logger = new Logger($logFilePath, $logLevel);
+$logLevelName = strtoupper($_ENV['LOG_LEVEL'] ?? 'INFO'); // INFO adalah default yang baik
+// Pastikan $logLevelName adalah salah satu konstanta dari LogLevel
+// Jika tidak, default ke LogLevel::INFO
+$validLogLevels = [
+    'DEBUG' => LogLevel::DEBUG, 'INFO' => LogLevel::INFO, 'NOTICE' => LogLevel::NOTICE,
+    'WARNING' => LogLevel::WARNING, 'ERROR' => LogLevel::ERROR, 'CRITICAL' => LogLevel::CRITICAL,
+    'ALERT' => LogLevel::ALERT, 'EMERGENCY' => LogLevel::EMERGENCY
+];
+$psrLogLevel = $validLogLevels[$logLevelName] ?? LogLevel::INFO;
+
+$logger = new Logger($logFilePath, $psrLogLevel);
 $patternLoader = new PatternLoader($logger);
 $httpClient = new HttpClient(['timeout' => (float)($_ENV['HTTP_CLIENT_TIMEOUT'] ?? 60.0)]);
 
 $appService = new AppService(
     $logger, $patternLoader, $httpClient,
     $patternsJsonPath, $baseCloneDir, $baseExportDir, $reportsDir,
-    $llmApiKey, $llmModelName
+    $llmConfigs, $llmPreferenceOrder,
+    $socketIoServerUrl, $socketIoProgressEvent // Teruskan konfigurasi Socket.IO
 );
 
 // --- Parsing Argumen CLI ---
@@ -70,12 +94,17 @@ for ($i = 2; $i < $argc; $i++) {
         $options[$parts[0]] = $parts[1] ?? true;
     }
 }
+// Tambahkan taskId jika belum ada dari opsi, untuk konsistensi
+if (!isset($options['taskId'])) {
+    $options['taskId'] = 'cli_task_' . uniqid();
+}
 
-$logger->info("CLI Application started. Action: {action}. Options: {options_json}", [
-    'action' => $action ?? 'none', 'options_json' => json_encode($options)
+
+$logger->info("CLI Application started. Action: {action}. TaskID: {taskId}. Options: {options_json}", [
+    'action' => $action ?? 'none', 'taskId' => $options['taskId'], 'options_json' => json_encode($options)
 ]);
 
-// --- Fungsi Bantuan CLI ---
+// --- Fungsi Bantuan CLI (cliShowHelp tetap sama) ---
 function cliShowHelp(string $errorMessage = ''): void
 {
     if ($errorMessage) echo "Error: {$errorMessage}\n\n";
@@ -83,24 +112,27 @@ function cliShowHelp(string $errorMessage = ''): void
     echo "Usage: php bin/run.php <command> [options]\n\n";
     echo "Commands:\n";
     echo "  analyze-file --path=<file_path.php>   Analyzes a single PHP file.\n";
+    echo "                                        [--taskId=<custom_task_id>]\n";
     echo "  process-repo --url=<git_repo_url>     Processes a full repository.\n";
     echo "                                        [--branch=<branch_name>]\n";
     echo "                                        [--infection-opts=\"--min-msi=50 --threads=2\"]\n";
+    echo "                                        [--taskId=<custom_task_id>]\n";
     echo "\n";
     exit($errorMessage ? 1 : 0);
 }
 
-// --- Dispatcher Perintah CLI ---
+
+// --- Dispatcher Perintah CLI (logika output tetap sama, AppService yang mengirim update socket) ---
 try {
     switch ($action) {
         case 'analyze-file':
             $result = $appService->handleAnalyzeFile($options);
+            // ... (output CLI sama seperti sebelumnya) ...
             if (empty($result['vulnerabilities'])) {
                 echo $result['message'] . " Path: " . $result['filePath'] . "\n";
             } else {
                 echo $result['message'] . " Path: " . $result['filePath'] . "\n";
                 foreach ($result['vulnerabilities'] as $vulnArray) {
-                    // Buat instance VulnerabilityLocation untuk menggunakan __toString atau format manual
                     echo "----------------------------------------\n";
                     echo "[{$vulnArray['cwe_id']}] Rule: {$vulnArray['rule_name']}\n";
                     echo "Sink: {$vulnArray['sink_function']} | Input: {$vulnArray['vulnerable_input']}\n";
@@ -116,19 +148,24 @@ try {
 
         case 'process-repo':
             $result = $appService->handleProcessRepo($options);
-            echo "Repository Processing Summary for: {$result['repoUrl']}\n";
-            echo "-------------------------------------------------\n";
+            // ... (output CLI sama seperti sebelumnya, termasuk msiComparisonReportPath) ...
+            echo "Repository Processing Summary for: {$result['repoUrl']} (TaskID: {$result['taskId']})\n";
+            echo "=================================================\n";
+            echo "Overall Process Log:\n";
             foreach($result['processLog'] as $logEntry) {
                 echo "- {$logEntry}\n";
             }
             echo "-------------------------------------------------\n";
             echo "Vulnerabilities Found: {$result['vulnerabilitiesFound']}\n";
-            if ($result['heuristicAnalysisReport']) echo "Heuristic Report: {$result['heuristicAnalysisReport']}\n";
+            if ($result['heuristicAnalysisReportPath']) echo "Heuristic Report: {$result['heuristicAnalysisReportPath']}\n";
             if ($result['initialMsi'] !== null) echo "Initial MSI: {$result['initialMsi']}%\n";
             echo "AI Tests Generated: {$result['aiTestsGeneratedCount']}\n";
             echo "AI Tests Selected: {$result['aiTestsSelectedCount']}\n";
-            if ($result['finalMsi'] !== null) echo "Final MSI (Simulated): {$result['finalMsi']}%\n";
+            if ($result['finalMsi'] !== null) echo "Final MSI: {$result['finalMsi']}%\n";
+            if ($result['msiImprovement'] !== null) echo "MSI Improvement: {$result['msiImprovement']}%\n";
             if ($result['exportedAiTestsPath']) echo "Exported AI Tests: {$result['exportedAiTestsPath']}\n";
+            if ($result['msiComparisonReportPath']) echo "MSI Comparison Report: {$result['msiComparisonReportPath']}\n";
+            echo "=================================================\n";
             break;
 
         case null:
@@ -153,6 +190,5 @@ try {
     exit(1);
 }
 
-$logger->info("CLI Application finished action: {action}.", ['action' => $action ?? 'none']);
+$logger->info("CLI Application finished action: {action}. TaskID: {$options['taskId']}.", ['action' => $action ?? 'none']);
 exit(0);
-

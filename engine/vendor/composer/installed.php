@@ -3,7 +3,7 @@
         'name' => 'engine/traversal-services',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '821411c8ffda09cdb831d1f996030c815dbf9dc0',
+        'reference' => '90eeec0bb5e14279da668672034b2003e5f41e80',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -49,7 +49,7 @@
         'engine/traversal-services' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '821411c8ffda09cdb831d1f996030c815dbf9dc0',
+            'reference' => '90eeec0bb5e14279da668672034b2003e5f41e80',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

@@ -5,72 +5,123 @@ declare(strict_types=1);
 namespace App\Utils;
 
 use DateTimeImmutable;
+use Psr\Log\LoggerInterface; // Impor interface PSR-3
+use Psr\Log\LogLevel;      // Impor konstanta level log PSR-3
 use Stringable;
 
-// A simple logger, consider using a PSR-3 compliant logger like Monolog for more features.
-class Logger
+// Implementasikan LoggerInterface
+class Logger implements LoggerInterface
 {
-    public const DEBUG = 100;
-    public const INFO = 200;
-    public const WARNING = 300;
-    public const ERROR = 400;
+    // Level logging kustom Anda bisa tetap ada jika ingin digunakan secara internal,
+    // tetapi metode PSR-3 akan menggunakan konstanta dari LogLevel.
+    public const DEBUG = 100;   // Sesuai dengan LogLevel::DEBUG
+    public const INFO = 200;    // Sesuai dengan LogLevel::INFO
+    public const WARNING = 300; // Sesuai dengan LogLevel::WARNING
+    public const ERROR = 400;   // Sesuai dengan LogLevel::ERROR
 
     private string $logFilePath;
-    private int $minLevel;
+    private int $minLevelPsr; // Gunakan level PSR-3 untuk perbandingan internal
 
-    public function __construct(string $logFilePath = 'php://stdout', int $minLevel = self::INFO)
+    private static array $psrLevelMap = [
+        LogLevel::DEBUG     => self::DEBUG,
+        LogLevel::INFO      => self::INFO,
+        LogLevel::NOTICE    => self::INFO, // Map Notice ke Info
+        LogLevel::WARNING   => self::WARNING,
+        LogLevel::ERROR     => self::ERROR,
+        LogLevel::CRITICAL  => self::ERROR, // Map Critical ke Error
+        LogLevel::ALERT     => self::ERROR, // Map Alert ke Error
+        LogLevel::EMERGENCY => self::ERROR, // Map Emergency ke Error
+    ];
+
+
+    public function __construct(string $logFilePath = 'php://stdout', string $minLevelName = LogLevel::INFO)
     {
         $this->logFilePath = $logFilePath;
-        $this->minLevel = $minLevel;
+        // Konversi nama level PSR-3 ke nilai integer internal Anda jika perlu,
+        // atau langsung gunakan level PSR-3 untuk $minLevelPsr
+        $this->minLevelPsr = $this->levelToPsrInt($minLevelName);
     }
 
-    public function debug(string|Stringable $message, array $context = []): void
+    private function levelToPsrInt(string $levelName): int
     {
-        $this->log(self::DEBUG, (string) $message, $context);
+        $levelName = strtolower($levelName);
+        return self::$psrLevelMap[$levelName] ?? self::INFO; // Default ke INFO jika tidak dikenal
     }
 
-    public function info(string|Stringable $message, array $context = []): void
+    // Implementasi metode-metode dari LoggerInterface
+    public function emergency(string|Stringable $message, array $context = []): void
     {
-        $this->log(self::INFO, (string) $message, $context);
+        $this->log(LogLevel::EMERGENCY, $message, $context);
     }
 
-    public function warning(string|Stringable $message, array $context = []): void
+    public function alert(string|Stringable $message, array $context = []): void
     {
-        $this->log(self::WARNING, (string) $message, $context);
+        $this->log(LogLevel::ALERT, $message, $context);
+    }
+
+    public function critical(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::CRITICAL, $message, $context);
     }
 
     public function error(string|Stringable $message, array $context = []): void
     {
-        $this->log(self::ERROR, (string) $message, $context);
+        $this->log(LogLevel::ERROR, $message, $context);
     }
 
-    private function log(int $level, string $message, array $context = []): void
+    public function warning(string|Stringable $message, array $context = []): void
     {
-        if ($level < $this->minLevel) {
+        $this->log(LogLevel::WARNING, $message, $context);
+    }
+
+    public function notice(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::NOTICE, $message, $context);
+    }
+
+    public function info(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::INFO, $message, $context);
+    }
+
+    public function debug(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::DEBUG, $message, $context);
+    }
+
+    /**
+     * Logs with an arbitrary level.
+     *
+     * @param mixed  $level   Nama level dari Psr\Log\LogLevel
+     * @param string|Stringable $message
+     * @param array  $context
+     * @return void
+     */
+    public function log($level, string|Stringable $message, array $context = []): void
+    {
+        $levelName = (string) $level; // Level dari PSR-3 adalah string
+        $currentLevelPsr = $this->levelToPsrInt($levelName);
+
+        if ($currentLevelPsr < $this->minLevelPsr) {
+            // Jika level logging kustom Anda lebih granular, Anda mungkin perlu logika berbeda.
+            // Untuk PSR-3, perbandingan level biasanya dilakukan dengan konstanta integer dari library PSR-3 itu sendiri.
+            // Namun, karena kita memetakan ke integer internal, kita gunakan itu.
+            // Atau, Anda bisa menyimpan $minLevel sebagai string dan membandingkan dengan $levelName.
             return;
         }
-
-        $levelName = match ($level) {
-            self::DEBUG => 'DEBUG',
-            self::INFO => 'INFO',
-            self::WARNING => 'WARNING',
-            self::ERROR => 'ERROR',
-            default => 'LOG',
-        };
 
         $timestamp = (new DateTimeImmutable())->format('Y-m-d H:i:s.u');
         $formattedMessage = sprintf(
             "[%s] [%s]: %s%s\n",
             $timestamp,
-            $levelName,
-            $this->interpolate($message, $context),
+            strtoupper($levelName), // Gunakan nama level PSR-3
+            $this->interpolate((string) $message, $context),
             $context ? " " . json_encode($context) : ""
         );
 
         if ($this->logFilePath === 'php://stdout' || $this->logFilePath === 'php://stderr') {
             file_put_contents($this->logFilePath, $formattedMessage);
         } else {
-            // Ensure directory exists
             $logDir = dirname($this->logFilePath);
             if (!is_dir($logDir)) {
                 mkdir($logDir, 0775, true);
@@ -91,11 +142,18 @@ class Logger
 
         $replacements = [];
         foreach ($context as $key => $val) {
-            if (is_string($val) || (is_object($val) && method_exists($val, '__toString'))) {
-                $replacements['{' . $key . '}'] = $val;
-            } elseif (is_scalar($val)) {
-                 $replacements['{' . $key . '}'] = (string) $val;
+            // Pastikan key adalah string dan tidak mengandung karakter yang tidak valid untuk placeholder
+            if (!is_string($key) || empty($key)) {
+                continue;
             }
+            if (is_string($val) || (is_object($val) && method_exists($val, '__toString'))) {
+                $replacements['{' . $key . '}'] = (string) $val;
+            } elseif (is_scalar($val) || $val === null) {
+                 $replacements['{' . $key . '}'] = (string) $val;
+            } elseif (is_array($val)) { // PSR-3 tidak secara eksplisit menangani array, tapi json_encode adalah opsi
+                $replacements['{' . $key . '}'] = '[array_data]'; // atau json_encode($val) jika diinginkan
+            }
+            // Objek tanpa __toString() atau resource akan diabaikan oleh strtr, atau bisa ditangani di sini
         }
         return strtr($message, $replacements);
     }
