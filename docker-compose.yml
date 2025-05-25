@@ -2,15 +2,17 @@ services:
   engine:
     container_name: traversal-engine
     build: ./app-engine
-    command: ['php', '-S', "0.0.0.0:8080", "server.php"]
+    command: ['php', '-S', "0.0.0.0:8080", "/app/public/server.php"]
     ports:
       - "8080:8080"
     volumes:
       - ./app-engine/src:/app/src
-      - ./workspace:/app/workspace
-      - ./logs/engine:/app/logs
-    environment:
-      - APP_ENV=development
+      - ./app-engine/bin:/app/bin
+      - ./app-engine/public:/app/public
+      - ./tmp:/app/tmp
+      - ./reports/engine:/app/reports
+    env_file:
+      - ./app-engine/.env
     networks:
       - traversal
 

@@ -1,4 +1,5 @@
-app-engine/workspace
+app-engine/tmp
+app-engine/reports
 app-engine/vendor
 app-engine/*lock.json
 
@@ -7,6 +8,7 @@ app-server/*lock.json
 
 materials
 logs
-workspace
+reports
+tmp
 
 .env

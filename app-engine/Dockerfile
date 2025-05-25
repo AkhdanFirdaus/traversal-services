@@ -1,5 +1,5 @@
 # use php latest stable image with minimal dependencies
-FROM php:8.2-cli
+FROM php:8.2
 
 # install dependencies
 RUN apt-get update && apt-get install -y \
@@ -32,14 +32,6 @@ COPY . .
 
 # Install dependencies
 RUN composer install --no-interaction --prefer-dist
-
-# Prepare necessary directories
-RUN mkdir -p \
-    workspace/repo \
-    workspace/mutants \
-    workspace/generated-tests \
-    workspace/reports \
-    vendor
 
 # Ensure bin scripts are executable
 RUN chmod +x vendor/bin/phpunit vendor/bin/infection || true

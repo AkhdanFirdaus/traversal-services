@@ -1,0 +1,35 @@
+{
+    "source": {
+        "directories": [
+            "src"
+        ],
+        "excludes": [
+            "Fixtures",
+            "Migrations",
+            "Tests",
+            "Kernel.php"
+        ]
+    },
+    "logs": {
+        "text": "infection.log",
+        "summary": "summary.log",
+        "json": "infection-report.json",
+        "debug": "debug.log",
+        "perMutator": "per-mutator.md"
+    },
+    "mutators": {
+        "@default": true,
+        "DecrementInteger": {
+            "ignore": [
+                "MyProject\\SomeClass::someSpecificMethod"
+            ]
+        },
+        "IncrementInteger": false
+    },
+    "phpUnit": {
+        "configDir": ".",
+        "customPath": "vendor/bin/phpunit"
+    },
+    "timeout": 10,
+    "threads": "4"
+}

@@ -1,3 +1,27 @@
-OPENAI_API_KEY=
+OPENAI_API_KEY=""
 ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
+
+# Contoh file .env
+# Salin file ini ke .env dan sesuaikan nilainya.
+
+# Konfigurasi Aplikasi Dasar
+APP_ENV=development # development, production
+APP_DEBUG=true
+LOG_PATH=tmp/app.log
+LOG_LEVEL=DEBUG # DEBUG, INFO, WARNING, ERROR
+
+# Path Konfigurasi
+PATTERNS_JSON_PATH=config/patterns.json
+
+# Path Direktori Kerja
+BASE_CLONE_DIR=tmp/clones
+BASE_EXPORT_DIR=reports/exported_test_cases
+REPORTS_DIR=reports
+
+# Konfigurasi LLM (Contoh untuk Gemini)
+LLM_API_KEY=""
+LLM_MODEL_NAME="gemini-2.0-flash" # Atau model lain yang Anda gunakan
+
+# Konfigurasi untuk REST API (jika diperlukan, misal untuk autentikasi sederhana)
+# API_SECRET_KEY=""
