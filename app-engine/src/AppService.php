@@ -26,9 +26,12 @@ class AppService
     private string $patternsJsonPath;
     private string $baseCloneDir;
     private string $baseExportDir;
-    private string $reportsDir; // Direktori utama untuk semua jenis laporan
-    private string $llmApiKey;
-    private string $llmModelName;
+    private string $reportsDir;
+    // Hapus $llmApiKey dan $llmModelName tunggal
+    // Tambahkan array untuk konfigurasi LLM
+    private array $llmConfigs;
+    private string $llmPreferenceOrder;
+
 
     public function __construct(
         Logger $logger,
@@ -37,9 +40,10 @@ class AppService
         string $patternsJsonPath,
         string $baseCloneDir,
         string $baseExportDir,
-        string $reportsDir, // Terima direktori laporan utama
-        string $llmApiKey,
-        string $llmModelName
+        string $reportsDir,
+        // Terima array konfigurasi LLM
+        array $llmConfigs,
+        string $llmPreferenceOrder
     ) {
         $this->logger = $logger;
         $this->patternLoader = $patternLoader;
@@ -47,12 +51,14 @@ class AppService
         $this->patternsJsonPath = $patternsJsonPath;
         $this->baseCloneDir = $baseCloneDir;
         $this->baseExportDir = $baseExportDir;
-        $this->reportsDir = rtrim($reportsDir, DIRECTORY_SEPARATOR); // Pastikan tidak ada trailing slash
-        $this->llmApiKey = $llmApiKey;
-        $this->llmModelName = $llmModelName;
+        $this->reportsDir = rtrim($reportsDir, DIRECTORY_SEPARATOR);
+        // Simpan konfigurasi LLM
+        $this->llmConfigs = $llmConfigs;
+        $this->llmPreferenceOrder = $llmPreferenceOrder;
     }
 
-    // Metode handleAnalyzeFile tetap sama seperti sebelumnya...
+    // Metode handleAnalyzeFile tetap sama
+
     /**
      * Handles the 'analyze-file' action.
      * @param array $options Options, expected to contain 'path'.
@@ -78,7 +84,6 @@ class AppService
         $reportPath = null;
         if (!empty($vulnerabilities)) {
             $reportFileName = 'heuristic_report_' . basename($filePath) . '_' . date('YmdHis') . '.json';
-            // Pastikan subdirektori ada
             $heuristicReportsSubDir = $this->reportsDir . '/heuristic_analysis';
             if(!is_dir($heuristicReportsSubDir)) mkdir($heuristicReportsSubDir, 0775, true);
             $reportPath = $heuristicReportsSubDir . DIRECTORY_SEPARATOR . $reportFileName;
@@ -99,13 +104,13 @@ class AppService
 
     public function handleProcessRepo(array $options): array
     {
+        // ... (bagian awal metode handleProcessRepo tetap sama: $repoUrl, $branch, $infectionOptions, $processLog, $msiReportData) ...
         $repoUrl = $options['url'] ?? null;
         if (!$repoUrl) {
             throw new \InvalidArgumentException("Missing 'url' parameter for process-repo.");
         }
         $branch = $options['branch'] ?? null;
         $infectionOptsString = $options['infection-opts'] ?? '';
-        // Tambahkan --logger-json ke opsi default jika belum ada, untuk parsing yang lebih baik
         $infectionBaseOptions = ['--log-verbosity=default'];
         if (strpos($infectionOptsString, '--logger-json') === false) {
             $infectionBaseOptions[] = '--logger-json=infection_report.json';
@@ -123,7 +128,7 @@ class AppService
             'initialMsiReport' => null,
             'finalMsiReportAfterLLM' => null,
             'msiImprovement' => null,
-            'overallProcessLog' => &$processLog // Referensi ke $processLog
+            'overallProcessLog' => &$processLog
         ];
 
         // 1. Clone Repository
@@ -150,12 +155,11 @@ class AppService
         $analyzer = new HeuristicAnalyzer($this->logger, $this->patternLoader, $this->patternsJsonPath);
         $allVulnerabilitiesFlat = [];
         $srcPath = $clonedRepoPath . DIRECTORY_SEPARATOR . (is_dir($clonedRepoPath . DIRECTORY_SEPARATOR . 'src') ? 'src' : '');
-        if (!is_dir($srcPath) && is_dir($clonedRepoPath . DIRECTORY_SEPARATOR . 'app')) { // Check for 'app' dir as common alternative
+        if (!is_dir($srcPath) && is_dir($clonedRepoPath . DIRECTORY_SEPARATOR . 'app')) {
             $srcPath = $clonedRepoPath . DIRECTORY_SEPARATOR . 'app';
         } elseif (!is_dir($srcPath)) {
-            $srcPath = $clonedRepoPath; // Fallback to root
+            $srcPath = $clonedRepoPath;
         }
-
 
         $vulnerabilitiesByFile = $analyzer->analyzeDirectory($srcPath);
         $heuristicReportPath = null;
@@ -180,11 +184,9 @@ class AppService
         // 3. Run Infection (Initial)
         $infectionRunner = new InfectionRunner($this->logger);
         $processLog[] = "Running initial Infection scan...";
-        // Pastikan nama file log unik untuk run ini
         $initialInfectionOptions = $infectionOptions;
-        $initialInfectionOptions[] = '--logger-json=initial_infection_report.json'; // Nama file JSON log unik
-        $initialInfectionOptions[] = '--log-file=initial_infection.log'; // Nama file text log unik
-
+        $initialInfectionOptions[] = '--logger-json=initial_infection_report.json';
+        $initialInfectionOptions[] = '--log-file=initial_infection.log';
 
         $initialInfectionResults = $infectionRunner->run($clonedRepoPath, null, $initialInfectionOptions);
         $initialMsi = null;
@@ -193,7 +195,7 @@ class AppService
             $msiReportData['initialMsiReport'] = [
                 'msi' => $initialMsi,
                 'coveredMsi' => $initialInfectionResults['covered_msi'],
-                'infectionLogPath' => $initialInfectionResults['text_log_path'], // Seharusnya path absolut atau relatif dari $clonedRepoPath
+                'infectionLogPath' => $initialInfectionResults['text_log_path'],
                 'infectionJsonReportPath' => $initialInfectionResults['json_report_path'],
                 'details' => "MSI score before any AI-generated tests were added."
             ];
@@ -210,12 +212,14 @@ class AppService
         // 4. AI Test Generation
         $generatedTestsData = [];
         $aiTestsGeneratedCount = 0;
-        if (!empty($allVulnerabilitiesFlat) && !empty($this->llmApiKey)) {
-            $aiGenerator = new AiTestGenerator($this->logger, $this->httpClient, $this->llmApiKey, $this->llmModelName);
-            $processLog[] = "Generating AI tests for " . count($allVulnerabilitiesFlat) . " found vulnerabilities...";
+        // Gunakan $this->llmConfigs dan $this->llmPreferenceOrder yang sudah disimpan
+        if (!empty($allVulnerabilitiesFlat) && !empty($this->llmConfigs)) {
+            // Teruskan konfigurasi LLM dan preferensi ke AiTestGenerator
+            $aiGenerator = new AiTestGenerator($this->logger, $this->httpClient, $this->llmConfigs, $this->llmPreferenceOrder);
+            $processLog[] = "Generating AI tests for " . count($allVulnerabilitiesFlat) . " found vulnerabilities using configured LLMs...";
             foreach ($allVulnerabilitiesFlat as $idx => $vuln) {
                 $this->logger->info("AppService: Requesting AI test for vulnerability #{$idx} in {$vuln->filePath}");
-                $generatedTestCode = $aiGenerator->generateTestsForVulnerability($vuln);
+                $generatedTestCode = $aiGenerator->generateTestsForVulnerability($vuln); // Framework bisa jadi opsi
                 if ($generatedTestCode) {
                     $aiTestsGeneratedCount++;
                     $testFileNameHint = "AiGenerated_" . preg_replace('/[^a-zA-Z0-9_-]/', '_', $vuln->cweId) . "_" . basename($vuln->filePath, '.php') . "_" . uniqid() ."Test.php";
@@ -228,25 +232,18 @@ class AppService
                 }
             }
             $processLog[] = "AI generated {$aiTestsGeneratedCount} test(s).";
-        } elseif (empty($this->llmApiKey)) {
-            $this->logger->warning("AppService: LLM_API_KEY not set. Skipping AI test generation.");
-            $processLog[] = "LLM_API_KEY not set. Skipping AI test generation.";
+        } elseif (empty($this->llmConfigs)) {
+            $this->logger->warning("AppService: No LLMs configured or API keys missing. Skipping AI test generation.");
+            $processLog[] = "No LLMs configured. Skipping AI test generation.";
         }
          $msiReportData['aiTestsGeneratedCount'] = $aiTestsGeneratedCount;
 
+        // ... (Sisa dari metode handleProcessRepo: langkah 5, 6, 7, 8, dan return tetap sama seperti versi sebelumnya) ...
         // 5. Add AI tests to project and Run Infection (Final)
         $finalMsi = null;
         if (!empty($generatedTestsData)) {
             $processLog[] = "Attempting to integrate AI-generated tests and run final Infection scan...";
-            // **LANGKAH KRUSIAL (Membutuhkan Implementasi Rinci):**
-            // Di sini Anda perlu logika untuk:
-            // a. Menentukan path yang tepat untuk menyimpan file test AI di dalam $clonedRepoPath/tests/
-            //    (misalnya, $clonedRepoPath/tests/AiGenerated/). Buat direktorinya jika belum ada.
-            // b. Menyimpan setiap $testData['code'] ke file yang sesuai.
-            // c. Memastikan PHPUnit/test runner proyek yang di-clone akan menemukan tes-tes baru ini.
-            //    Ini mungkin melibatkan pembaruan `phpunit.xml` atau mengikuti konvensi penamaan.
-            // d. Untuk saat ini, kita hanya log bahwa tes "akan ditambahkan".
-            $testIntegrationSuccess = true; // Asumsikan sukses untuk demo
+            $testIntegrationSuccess = true;
             $aiTestFilesWritten = 0;
             $aiTestsDir = $clonedRepoPath . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'AiGenerated';
             if (!is_dir($aiTestsDir)) mkdir($aiTestsDir, 0775, true);
@@ -257,15 +254,11 @@ class AppService
                     $aiTestFilesWritten++;
                 } else {
                     $this->logger->error("Failed to write AI test file: {$testFilePath}");
-                    // $testIntegrationSuccess = false; // Bisa jadi error parsial
                 }
             }
             $processLog[] = "{$aiTestFilesWritten} AI-generated test files written to {$aiTestsDir}.";
 
-
             if ($aiTestFilesWritten > 0) {
-                // Jalankan 'composer dump-autoload' di cloned repo jika ada tes baru di namespace baru
-                // (Tergantung bagaimana Anda mengatur namespace tes AI)
                 $this->logger->info("Running composer dump-autoload in cloned repo after adding AI tests.");
                 $composerDumpProcess = new Process(['composer', 'dump-autoload', '--optimize'], $clonedRepoPath);
                 try {
@@ -276,12 +269,9 @@ class AppService
                     $processLog[] = "Warning: Composer dump-autoload failed after adding AI tests.";
                 }
 
-
-                // Pastikan nama file log unik untuk run ini
                 $finalInfectionOptions = $infectionOptions;
                 $finalInfectionOptions[] = '--logger-json=final_infection_report.json';
                 $finalInfectionOptions[] = '--log-file=final_infection.log';
-
 
                 $finalInfectionResults = $infectionRunner->run($clonedRepoPath, null, $finalInfectionOptions);
                 if ($finalInfectionResults) {
@@ -291,7 +281,7 @@ class AppService
                         'coveredMsi' => $finalInfectionResults['covered_msi'],
                         'infectionLogPath' => $finalInfectionResults['text_log_path'],
                         'infectionJsonReportPath' => $finalInfectionResults['json_report_path'],
-                        'aiTestsAppliedCount' => $aiTestFilesWritten, // atau count($generatedTestsData)
+                        'aiTestsAppliedCount' => $aiTestFilesWritten,
                         'details' => "MSI score after AI-generated tests were integrated and executed."
                     ];
                      if ($finalMsi !== null) {
@@ -316,11 +306,9 @@ class AppService
             $msiReportData['finalMsiReportAfterLLM'] = ['details' => 'No AI tests were generated.'];
         }
 
-
-        // 6. Select Best Tests (berdasarkan data yang ada)
+        // 6. Select Best Tests
         $testSelector = new TestSelector($this->logger);
-        // Perlu data metrik dari hasil infeksi kedua untuk seleksi yang lebih baik
-        $bestTests = $testSelector->selectBestTests($generatedTestsData); // $generatedTestsData mungkin perlu diperbarui dengan hasil infeksi
+        $bestTests = $testSelector->selectBestTests($generatedTestsData);
         $processLog[] = count($bestTests) . " AI-generated tests selected based on initial criteria.";
         $msiReportData['aiTestsSelectedCount'] = count($bestTests);
 
@@ -346,8 +334,7 @@ class AppService
         FileHelper::saveJsonReport($msiReportFullPath, $msiReportData, $this->logger);
         $this->logger->info("MSI comparison report saved to: {msiReportPath}", ['msiReportPath' => $msiReportFullPath]);
 
-
-        // 8. Cleanup (selalu di akhir blok try utama)
+        // 8. Cleanup
         $clonedRepoCleanupMessage = "Cloned repository cleanup action for {$clonedRepoPath}.";
         if ($clonedRepoPath && is_dir($clonedRepoPath)) {
             if ($cloner->cleanup($clonedRepoPath)) {
@@ -361,14 +348,11 @@ class AppService
         $processLog[] = $clonedRepoCleanupMessage;
         $this->logger->info($clonedRepoCleanupMessage);
 
-
         $processLog[] = "Repository processing finished for: {$repoUrl}";
 
-        // Data yang dikembalikan oleh AppService
         return [
             'message' => "Repository processing completed for {$repoUrl}.",
             'repoUrl' => $repoUrl,
-            // 'clonedPath' => $clonedRepoPath, // Mungkin tidak relevan karena sudah di-cleanup
             'heuristicAnalysisReportPath' => $heuristicReportPath,
             'vulnerabilitiesFound' => count($allVulnerabilitiesFlat),
             'initialMsi' => $initialMsi,
@@ -377,8 +361,8 @@ class AppService
             'finalMsi' => $finalMsi,
             'msiImprovement' => $msiReportData['msiImprovement'],
             'exportedAiTestsPath' => $exportedZipPath,
-            'msiComparisonReportPath' => $msiReportFullPath, // Path ke laporan MSI gabungan
-            'processLog' => $processLog // Log langkah-langkah untuk output CLI/API
+            'msiComparisonReportPath' => $msiReportFullPath,
+            'processLog' => $processLog
         ];
     }
 }

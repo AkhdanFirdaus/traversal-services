@@ -1,15 +1,9 @@
-OPENAI_API_KEY=""
-ANTHROPIC_API_KEY=
-GEMINI_API_KEY=
-
-# Contoh file .env
-# Salin file ini ke .env dan sesuaikan nilainya.
-
 # Konfigurasi Aplikasi Dasar
 APP_ENV=development # development, production
 APP_DEBUG=true
 LOG_PATH=tmp/app.log
 LOG_LEVEL=DEBUG # DEBUG, INFO, WARNING, ERROR
+HTTP_CLIENT_TIMEOUT=60.0
 
 # Path Konfigurasi
 PATTERNS_JSON_PATH=config/patterns.json
@@ -19,9 +13,23 @@ BASE_CLONE_DIR=tmp/clones
 BASE_EXPORT_DIR=reports/exported_test_cases
 REPORTS_DIR=reports
 
-# Konfigurasi LLM (Contoh untuk Gemini)
-LLM_API_KEY=""
-LLM_MODEL_NAME="gemini-2.0-flash" # Atau model lain yang Anda gunakan
+# --- Konfigurasi LLM ---
+# Tentukan urutan preferensi LLM, dipisahkan koma (opsional, jika tidak ada, akan dicoba sesuai urutan di kode)
+# Contoh: LLM_PREFERENCE_ORDER="gemini,anthropic,openai"
+LLM_PREFERENCE_ORDER="gemini,openai,anthropic"
+
+# Google Gemini
+GEMINI_API_KEY=""
+GEMINI_MODEL_NAME="gemini-2.0-flash" # atau model Gemini lain yang sesuai
+
+# OpenAI
+OPENAI_API_KEY=""
+OPENAI_MODEL_NAME="gpt-4o" # atau model OpenAI lain seperti gpt-4-turbo-preview
+
+# Anthropic Claude
+ANTHROPIC_API_KEY=""
+ANTHROPIC_MODEL_NAME="claude-3-haiku-20240307" # atau claude-3-sonnet-20240229, claude-3-opus-20240229
+ANTHROPIC_API_VERSION="2023-06-01" # Versi API Anthropic
 
 # Konfigurasi untuk REST API (jika diperlukan, misal untuk autentikasi sederhana)
 # API_SECRET_KEY=""
