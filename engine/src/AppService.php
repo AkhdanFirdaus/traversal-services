@@ -13,12 +13,12 @@ use App\Pipeline\Exporter;
 use App\Utils\Logger;
 use App\Utils\PatternLoader;
 use App\Utils\FileHelper;
-use App\Utils\SocketNotifier; // Tambahkan ini
+use App\Utils\SocketNotifier;
 use App\AST\VulnerabilityLocation; // Untuk type hint
 use GuzzleHttp\Client as HttpClient;
 use Symfony\Component\Process\Process;
 use Throwable;
-use DateTimeImmutable, DateTimeZone; // Untuk timestamp
+use DateTimeImmutable, DateTimeZone;
 
 class AppService
 {
@@ -31,7 +31,7 @@ class AppService
     private string $reportsDir;
     private array $llmConfigs;
     private string $llmPreferenceOrder;
-    private ?SocketNotifier $socketNotifier; // Tambahkan properti SocketNotifier
+    private ?SocketNotifier $socketNotifier;
 
     public function __construct(
         Logger $logger,
@@ -41,9 +41,8 @@ class AppService
         string $baseCloneDir,
         string $baseExportDir,
         string $reportsDir,
-        array $llmConfigs,
+        array $llmConfigs, // Terima array konfigurasi LLM
         string $llmPreferenceOrder,
-        // Tambahkan parameter untuk konfigurasi SocketNotifier
         ?string $socketIoServerUrl,
         ?string $socketIoProgressEvent
     ) {
@@ -56,16 +55,19 @@ class AppService
         $this->reportsDir = rtrim($reportsDir, DIRECTORY_SEPARATOR);
         $this->llmConfigs = $llmConfigs;
         $this->llmPreferenceOrder = $llmPreferenceOrder;
-
-        // Inisialisasi SocketNotifier
         $this->socketNotifier = new SocketNotifier($socketIoServerUrl, $socketIoProgressEvent ?? 'pipeline_progress', $this->logger);
     }
 
-    // Metode handleAnalyzeFile tetap sama, tapi bisa juga mengirim progres jika diinginkan
+    /**
+     * Handles the 'analyze-file' action.
+     * @param array $options Options, expected to contain 'path'.
+     * @return array Result array with 'message', 'filePath', 'vulnerabilities'.
+     * @throws \InvalidArgumentException If path is missing or invalid.
+     */
     public function handleAnalyzeFile(array $options): array
     {
         $filePath = $options['path'] ?? null;
-        $taskId = $options['taskId'] ?? uniqid('task_'); // taskId untuk pelacakan
+        $taskId = $options['taskId'] ?? uniqid('task_');
 
         $this->socketNotifier?->emitProgress('analyze_file_started', ['filePath' => $filePath], null, $taskId);
 
@@ -86,7 +88,6 @@ class AppService
         $reportSaved = false;
         $reportPath = null;
         if (!empty($vulnerabilities)) {
-            // ... (logika penyimpanan laporan sama) ...
             $reportFileName = 'heuristic_report_' . basename($filePath) . '_' . date('YmdHis') . '.json';
             $heuristicReportsSubDir = $this->reportsDir . '/heuristic_analysis';
             if(!is_dir($heuristicReportsSubDir)) mkdir($heuristicReportsSubDir, 0775, true);
@@ -111,7 +112,7 @@ class AppService
     public function handleProcessRepo(array $options): array
     {
         $repoUrl = $options['url'] ?? null;
-        $taskId = $options['taskId'] ?? uniqid('task_'); // taskId untuk pelacakan
+        $taskId = $options['taskId'] ?? uniqid('task_');
 
         $this->socketNotifier?->emitProgress('process_repo_started', ['repoUrl' => $repoUrl], $repoUrl, $taskId);
 
@@ -119,7 +120,6 @@ class AppService
             $this->socketNotifier?->emitProgress('process_repo_failed', ['error' => "Missing 'url' parameter"], $repoUrl, $taskId);
             throw new \InvalidArgumentException("Missing 'url' parameter for process-repo.");
         }
-        // ... (sisa inisialisasi $branch, $infectionOptions, $processLog, $msiReportData sama) ...
         $branch = $options['branch'] ?? null;
         $infectionOptsString = $options['infection-opts'] ?? '';
         $infectionBaseOptions = ['--log-verbosity=default'];
@@ -135,13 +135,12 @@ class AppService
             'repositoryUrl' => $repoUrl,
             'processingTimestamp' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format(DateTimeImmutable::ATOM),
             'branch' => $branch,
-            'taskId' => $taskId, // Sertakan taskId dalam laporan
+            'taskId' => $taskId,
             'initialMsiReport' => null,
             'finalMsiReportAfterLLM' => null,
             'msiImprovement' => null,
             'overallProcessLog' => &$processLog
         ];
-
 
         // 1. Clone Repository
         $this->socketNotifier?->emitProgress('cloning_repository', [], $repoUrl, $taskId);
@@ -149,7 +148,6 @@ class AppService
         $clonedRepoPath = $cloner->clone($repoUrl, $branch);
         if (!$clonedRepoPath) {
             $this->socketNotifier?->emitProgress('cloning_failed', ['error' => "Failed to clone repository"], $repoUrl, $taskId);
-            // ... (logika error sama) ...
             $this->logger->error("AppService: Failed to clone repository: {repoUrl}. Aborting.", ['repoUrl' => $repoUrl]);
             throw new \RuntimeException("Failed to clone repository: {$repoUrl}.");
         }
@@ -158,7 +156,6 @@ class AppService
 
         // Composer Install
         $this->socketNotifier?->emitProgress('installing_dependencies', [], $repoUrl, $taskId);
-        // ... (logika composer install sama) ...
         $processLog[] = "Attempting to install composer dependencies in cloned repo...";
         $composerInstallProcess = new Process(['composer', 'install', '--no-dev', '--no-interaction', '--optimize-autoloader', '--ignore-platform-reqs'], $clonedRepoPath);
         try {
@@ -171,10 +168,8 @@ class AppService
             $this->socketNotifier?->emitProgress('dependencies_failed', ['error' => $e->getMessage()], $repoUrl, $taskId);
         }
 
-
         // 2. Heuristic Analysis
         $this->socketNotifier?->emitProgress('heuristic_analysis_started', [], $repoUrl, $taskId);
-        // ... (logika analisis heuristik sama) ...
         $analyzer = new HeuristicAnalyzer($this->logger, $this->patternLoader, $this->patternsJsonPath);
         $allVulnerabilitiesFlat = [];
         $srcPath = $clonedRepoPath . DIRECTORY_SEPARATOR . (is_dir($clonedRepoPath . DIRECTORY_SEPARATOR . 'src') ? 'src' : '');
@@ -201,14 +196,12 @@ class AppService
             FileHelper::saveJsonReport($heuristicReportPath, $reportData, $this->logger);
             $processLog[] = "Combined heuristic report saved to: {$heuristicReportPath}";
         }
-         $msiReportData['heuristicAnalysisReportPath'] = $heuristicReportPath;
-         $msiReportData['vulnerabilitiesFound'] = count($allVulnerabilitiesFlat);
+        $msiReportData['heuristicAnalysisReportPath'] = $heuristicReportPath;
+        $msiReportData['vulnerabilitiesFound'] = count($allVulnerabilitiesFlat);
         $this->socketNotifier?->emitProgress('heuristic_analysis_completed', ['vulnerabilitiesFound' => count($allVulnerabilitiesFlat), 'reportPath' => $heuristicReportPath], $repoUrl, $taskId);
-
 
         // 3. Run Infection (Initial)
         $this->socketNotifier?->emitProgress('initial_infection_started', [], $repoUrl, $taskId);
-        // ... (logika Infection awal sama, pastikan opsi unik untuk log) ...
         $infectionRunner = new InfectionRunner($this->logger);
         $processLog[] = "Running initial Infection scan...";
         $initialInfectionOptions = $infectionOptions;
@@ -234,20 +227,20 @@ class AppService
              $this->socketNotifier?->emitProgress('initial_infection_completed', $msiReportData['initialMsiReport'], $repoUrl, $taskId);
         } else {
             $processLog[] = "Initial Infection run failed or produced no parsable results.";
-             $msiReportData['initialMsiReport'] = ['error' => 'Infection run failed or no results.'];
-             $this->socketNotifier?->emitProgress('initial_infection_failed', ['error' => 'Infection run failed or no results.'], $repoUrl, $taskId);
+            $msiReportData['initialMsiReport'] = ['error' => 'Infection run failed or no results.'];
+            $this->socketNotifier?->emitProgress('initial_infection_failed', ['error' => 'Infection run failed or no results.'], $repoUrl, $taskId);
         }
 
         // 4. AI Test Generation
-        $generatedTestsData = [];
-        $aiTestsGeneratedCount = 0;
+        $generatedTestsData = []; // Ini akan menjadi array dari array (satu array per kerentanan, berisi tes dari berbagai LLM)
+        $totalAiTestsGenerated = 0;
+
         if (!empty($allVulnerabilitiesFlat) && !empty($this->llmConfigs)) {
             $this->socketNotifier?->emitProgress('ai_test_generation_started', ['vulnerabilityCount' => count($allVulnerabilitiesFlat)], $repoUrl, $taskId);
             $aiGenerator = new AiTestGenerator($this->logger, $this->httpClient, $this->llmConfigs, $this->llmPreferenceOrder);
-            // ... (logika iterasi $allVulnerabilitiesFlat dan pemanggilan $aiGenerator->generateTestsForVulnerability sama) ...
+
             foreach ($allVulnerabilitiesFlat as $idx => $vuln) {
-                $this->logger->info("AppService: Requesting AI test for vulnerability #{$idx} in {$vuln->filePath}");
-                // Kirim update per kerentanan yang diproses AI
+                $this->logger->info("AppService: Requesting AI tests for vulnerability #{$idx} in {$vuln->filePath}");
                 $this->socketNotifier?->emitProgress('ai_processing_vulnerability', [
                     'vulnerabilityIndex' => $idx + 1,
                     'totalVulnerabilities' => count($allVulnerabilitiesFlat),
@@ -255,54 +248,63 @@ class AppService
                     'line' => $vuln->startLine
                 ], $repoUrl, $taskId);
 
-                $generatedTestCode = $aiGenerator->generateTestsForVulnerability($vuln);
-                if ($generatedTestCode) {
-                    $aiTestsGeneratedCount++;
-                    $testFileNameHint = "AiGenerated_" . preg_replace('/[^a-zA-Z0-9_-]/', '_', $vuln->cweId) . "_" . basename($vuln->filePath, '.php') . "_" . uniqid() ."Test.php";
-                    $currentGeneratedTest = [
-                        'code' => $generatedTestCode,
-                        'source_vulnerability_cwe' => $vuln->cweId,
-                        'source_vulnerability_file' => $vuln->filePath,
-                        'filenameHint' => $testFileNameHint,
-                        // Sertakan snippet kode asli untuk perbandingan
-                        'originalCodeSnippet' => $vuln->codeSnippet
-                    ];
-                    $generatedTestsData[] = $currentGeneratedTest;
-                    // Kirim update dengan kode yang dihasilkan
-                    $this->socketNotifier?->emitProgress('ai_test_generated', [
-                        'vulnerabilityIndex' => $idx + 1,
-                        'filePath' => $vuln->filePath,
-                        'originalCode' => $vuln->codeSnippet, // Kode sumber sebelum (snippet kerentanan)
-                        'generatedTest' => $generatedTestCode  // Kode sumber sesudah (test case baru)
-                    ], $repoUrl, $taskId);
-                } else {
-                     $this->socketNotifier?->emitProgress('ai_test_generation_failed_for_vuln', [
-                        'vulnerabilityIndex' => $idx + 1,
-                        'filePath' => $vuln->filePath,
-                    ], $repoUrl, $taskId);
+                // AiTestGenerator sekarang mengembalikan array ['llm_provider' => 'kode_tes', ...]
+                $testsFromProviders = $aiGenerator->generateTestsForVulnerability($vuln);
+
+                foreach ($testsFromProviders as $llmProvider => $generatedTestCode) {
+                    if ($generatedTestCode) {
+                        $totalAiTestsGenerated++;
+                        $testFileNameHint = "AiGenerated_" . ucfirst($llmProvider) . "_" . preg_replace('/[^a-zA-Z0-9_-]/', '_', $vuln->cweId) . "_" . basename($vuln->filePath, '.php') . "_" . uniqid() ."Test.php";
+                        $generatedTestsData[] = [ // Tambahkan ke array utama $generatedTestsData
+                            'code' => $generatedTestCode,
+                            'llm_provider' => $llmProvider, // Simpan info LLM mana yang menghasilkan
+                            'source_vulnerability_cwe' => $vuln->cweId,
+                            'source_vulnerability_file' => $vuln->filePath,
+                            'source_vulnerability_line' => $vuln->startLine,
+                            'filenameHint' => $testFileNameHint,
+                            'originalCodeSnippet' => $vuln->codeSnippet
+                        ];
+                        $this->socketNotifier?->emitProgress('ai_test_generated', [
+                            'llm_provider' => $llmProvider,
+                            'vulnerabilityIndex' => $idx + 1,
+                            'filePath' => $vuln->filePath,
+                            'originalCode' => $vuln->codeSnippet,
+                            'generatedTest' => $generatedTestCode
+                        ], $repoUrl, $taskId);
+                    } else {
+                        $this->socketNotifier?->emitProgress('ai_test_generation_failed_for_vuln_provider', [
+                            'llm_provider' => $llmProvider,
+                            'vulnerabilityIndex' => $idx + 1,
+                            'filePath' => $vuln->filePath,
+                        ], $repoUrl, $taskId);
+                    }
                 }
             }
-            $processLog[] = "AI generated {$aiTestsGeneratedCount} test(s).";
-            $this->socketNotifier?->emitProgress('ai_test_generation_completed', ['generatedCount' => $aiTestsGeneratedCount], $repoUrl, $taskId);
+            $processLog[] = "AI generated a total of {$totalAiTestsGenerated} test(s) from all providers.";
+            $this->socketNotifier?->emitProgress('ai_test_generation_completed', ['totalGeneratedCount' => $totalAiTestsGenerated], $repoUrl, $taskId);
         } else {
-            // ... (logika jika LLM tidak dikonfigurasi atau tidak ada kerentanan) ...
             $processLog[] = "Skipping AI test generation (no vulnerabilities or LLM not configured).";
             $this->socketNotifier?->emitProgress('ai_test_generation_skipped', ['reason' => 'No vulnerabilities or LLM not configured.'], $repoUrl, $taskId);
         }
-        $msiReportData['aiTestsGeneratedCount'] = $aiTestsGeneratedCount;
+        $msiReportData['aiTestsGeneratedCount'] = $totalAiTestsGenerated;
 
 
         // 5. Add AI tests to project and Run Infection (Final)
         $finalMsi = null;
-        if (!empty($generatedTestsData)) {
-            $this->socketNotifier?->emitProgress('final_infection_started', ['aiTestCount' => $aiTestsGeneratedCount], $repoUrl, $taskId);
-            // ... (logika integrasi tes AI dan Infection akhir sama, pastikan opsi unik untuk log) ...
-            $processLog[] = "Attempting to integrate AI-generated tests and run final Infection scan...";
+        if (!empty($generatedTestsData)) { // $generatedTestsData sekarang adalah flat array dari semua tes yang berhasil
+            $this->socketNotifier?->emitProgress('final_infection_started', ['aiTestCount' => $totalAiTestsGenerated], $repoUrl, $taskId);
+            $processLog[] = "Attempting to integrate {$totalAiTestsGenerated} AI-generated tests and run final Infection scan...";
             $aiTestFilesWritten = 0;
             $aiTestsDir = $clonedRepoPath . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'AiGenerated';
-            if (!is_dir($aiTestsDir)) mkdir($aiTestsDir, 0775, true);
+            if (!is_dir($aiTestsDir)) {
+                if (!mkdir($aiTestsDir, 0775, true) && !is_dir($aiTestsDir)) {
+                    $this->logger->error("Failed to create AI tests directory: {$aiTestsDir}");
+                    // Handle error, mungkin tidak bisa melanjutkan
+                }
+            }
 
-            foreach($generatedTestsData as $testData) {
+
+            foreach($generatedTestsData as $testData) { // Iterasi melalui semua tes yang dikumpulkan
                 $testFilePath = $aiTestsDir . DIRECTORY_SEPARATOR . $testData['filenameHint'];
                 if (FileHelper::writeFile($testFilePath, $testData['code'], $this->logger)) {
                     $aiTestFilesWritten++;
@@ -359,28 +361,26 @@ class AppService
                  $this->socketNotifier?->emitProgress('final_infection_skipped', ['reason' => 'No AI tests written.'], $repoUrl, $taskId);
             }
         } else {
-            // ... (logika jika tidak ada tes AI yang dihasilkan) ...
             $processLog[] = "No AI tests generated, skipping final Infection run.";
             $this->socketNotifier?->emitProgress('final_infection_skipped', ['reason' => 'No AI tests generated.'], $repoUrl, $taskId);
             $msiReportData['finalMsiReportAfterLLM'] = ['details' => 'No AI tests were generated.'];
         }
 
-
         // 6. Select Best Tests
-        // ... (logika seleksi sama) ...
         $testSelector = new TestSelector($this->logger);
+        // $generatedTestsData sekarang berisi semua tes yang berhasil dibuat dari semua LLM
+        // TestSelector mungkin perlu logika untuk memilih subset terbaik dari ini
         $bestTests = $testSelector->selectBestTests($generatedTestsData);
         $processLog[] = count($bestTests) . " AI-generated tests selected based on initial criteria.";
         $msiReportData['aiTestsSelectedCount'] = count($bestTests);
         $this->socketNotifier?->emitProgress('test_selection_completed', ['selectedCount' => count($bestTests)], $repoUrl, $taskId);
 
         // 7. Export Test Cases
-        // ... (logika ekspor sama) ...
         $exportedZipPath = null;
         if (!empty($bestTests)) {
             $exporter = new Exporter($this->logger, $this->baseExportDir);
             $exportName = basename($repoUrl, '.git') . '_ai_tests_' . date('YmdHis');
-            $exportedZipPath = $exporter->exportTests($bestTests, $exportName, 'zip');
+            $exportedZipPath = $exporter->exportTests($bestTests, $exportName, 'zip'); // Exporter menerima array $bestTests
             if ($exportedZipPath) {
                 $processLog[] = "Selected AI tests exported to: {$exportedZipPath}";
                 $this->socketNotifier?->emitProgress('tests_exported', ['path' => $exportedZipPath], $repoUrl, $taskId);
@@ -392,7 +392,6 @@ class AppService
         $msiReportData['exportedAiTestsPath'] = $exportedZipPath;
 
         // Simpan Laporan MSI Gabungan
-        // ... (logika penyimpanan laporan MSI sama) ...
         $msiReportSubDir = $this->reportsDir . '/msi_reports';
         if (!is_dir($msiReportSubDir)) mkdir($msiReportSubDir, 0775, true);
         $msiReportFilename = 'msi_report_' . basename($repoUrl, '.git') . '_' . date('YmdHis') . '.json';
@@ -400,9 +399,7 @@ class AppService
         FileHelper::saveJsonReport($msiReportFullPath, $msiReportData, $this->logger);
         $this->logger->info("MSI comparison report saved to: {msiReportPath}", ['msiReportPath' => $msiReportFullPath]);
 
-
         // 8. Cleanup
-        // ... (logika cleanup sama) ...
         $clonedRepoCleanupMessage = "Cloned repository cleanup action for {$clonedRepoPath}.";
         if ($clonedRepoPath && is_dir($clonedRepoPath)) {
             if ($cloner->cleanup($clonedRepoPath)) {
@@ -418,16 +415,16 @@ class AppService
 
         $processLog[] = "Repository processing finished for: {$repoUrl}";
         $this->socketNotifier?->emitProgress('process_repo_completed', ['finalReportPath' => $msiReportFullPath], $repoUrl, $taskId);
-        $this->socketNotifier?->close(); // Tutup koneksi Socket.IO di akhir proses
+        $this->socketNotifier?->close();
 
         return [
             'message' => "Repository processing completed for {$repoUrl}.",
             'repoUrl' => $repoUrl,
-            'taskId' => $taskId, // Kembalikan taskId
+            'taskId' => $taskId,
             'heuristicAnalysisReportPath' => $heuristicReportPath,
             'vulnerabilitiesFound' => count($allVulnerabilitiesFlat),
             'initialMsi' => $initialMsi,
-            'aiTestsGeneratedCount' => $aiTestsGeneratedCount,
+            'aiTestsGeneratedCount' => $totalAiTestsGenerated, // Gunakan total dari semua LLM
             'aiTestsSelectedCount' => count($bestTests),
             'finalMsi' => $finalMsi,
             'msiImprovement' => $msiReportData['msiImprovement'],
@@ -437,7 +434,6 @@ class AppService
         ];
     }
 
-    // Pastikan __destruct juga menutup koneksi SocketNotifier jika ada
     public function __destruct()
     {
         $this->socketNotifier?->close();

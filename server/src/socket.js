@@ -11,8 +11,9 @@ exports.onConnection = (socket) => {
   socket.on('analyze_repo', async (gitUrl) => {
     console.log("Analyzing repo: " + gitUrl);
     try {
-      const request = await axios.post('http://engine:8080/analyze', {
+      const request = await axios.post('http://engine:8080/api/analyze', {
         url: gitUrl,
+        actionType: "process-repo",
       });
       
       socket.emit('server-response', {result: request.data});

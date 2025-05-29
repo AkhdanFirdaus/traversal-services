@@ -17,9 +17,12 @@ class AiTestGenerator
 
     // Konfigurasi LLM
     private array $llmConfigs;
-    private array $llmPreferenceOrder;
+    // Urutan preferensi bisa digunakan jika kita ingin mencoba satu per satu dan berhenti,
+    // atau untuk menentukan LLM "utama" jika hanya satu yang dibutuhkan.
+    // Untuk permintaan ini, kita akan mencoba semua yang terkonfigurasi.
+    private array $llmProvidersToTry;
 
-    // Konstanta untuk URL API dan default model (bisa juga dari config)
+    // Konstanta untuk URL API dan default model
     private const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     private const OPENAI_API_BASE_URL = "https://api.openai.com/v1/chat/completions";
     private const ANTHROPIC_API_BASE_URL = "https://api.anthropic.com/v1/messages";
@@ -27,118 +30,175 @@ class AiTestGenerator
     public function __construct(
         ?Logger $logger = null,
         ?HttpClient $httpClient = null,
-        array $llmConfigs = [], // Berisi konfigurasi untuk setiap LLM
-        string $preferenceOrderString = 'gemini,openai,anthropic' // Default order
+        array $llmConfigsFromApp = [], // Berisi konfigurasi untuk setiap LLM
+        string $preferenceOrderString = 'gemini,openai,anthropic' // Bisa digunakan untuk menentukan provider mana saja yang akan dicoba
     ) {
         $this->logger = $logger;
         $this->httpClient = $httpClient ?? new HttpClient(['timeout' => (float)($_ENV['HTTP_CLIENT_TIMEOUT'] ?? 60.0)]);
-        $this->llmConfigs = $this->validateAndPrepareLlmConfigs($llmConfigs);
-        $this->llmPreferenceOrder = array_map('trim', explode(',', $preferenceOrderString));
+        $this->llmConfigs = $this->validateAndPrepareLlmConfigs($llmConfigsFromApp);
+        
+        // Tentukan LLM mana yang akan dicoba berdasarkan yang terkonfigurasi dan mungkin preferensi
+        $this->llmProvidersToTry = [];
+        $preferredOrder = array_map('trim', explode(',', $preferenceOrderString));
+        foreach ($preferredOrder as $provider) {
+            if (isset($this->llmConfigs[$provider])) {
+                $this->llmProvidersToTry[] = $provider;
+            }
+        }
+        // Jika ada provider terkonfigurasi yang tidak ada di preferenceOrder, tambahkan di akhir
+        foreach (array_keys($this->llmConfigs) as $provider) {
+            if (!in_array($provider, $this->llmProvidersToTry)) {
+                $this->llmProvidersToTry[] = $provider;
+            }
+        }
 
-        if (empty($this->llmConfigs)) {
-            $this->logger?->warning("AiTestGenerator: No valid LLM configurations provided. Test generation will be skipped.");
+
+        if (empty($this->llmConfigs) || empty($this->llmProvidersToTry)) {
+            $this->logger?->warning("AiTestGenerator: No valid LLM configurations provided or to try. Test generation will be skipped.");
         }
     }
 
-    private function validateAndPrepareLlmConfigs(array $configs): array
+    private function validateAndPrepareLlmConfigs(array $configsInput): array
     {
         $validConfigs = [];
         // Gemini
-        if (!empty($configs['gemini']['api_key']) && !empty($configs['gemini']['model_name'])) {
+        if (!empty($configsInput['gemini']['api_key']) && !empty($configsInput['gemini']['model_name'])) {
             $validConfigs['gemini'] = [
-                'api_key' => $configs['gemini']['api_key'],
-                'model_name' => $configs['gemini']['model_name'],
-                'api_url' => self::GEMINI_API_BASE_URL . $configs['gemini']['model_name'] . ":generateContent",
+                'api_key' => $configsInput['gemini']['api_key'],
+                'model_name' => $configsInput['gemini']['model_name'],
+                'api_url' => self::GEMINI_API_BASE_URL . $configsInput['gemini']['model_name'] . ":generateContent",
             ];
         }
         // OpenAI
-        if (!empty($configs['openai']['api_key']) && !empty($configs['openai']['model_name'])) {
+        if (!empty($configsInput['openai']['api_key']) && !empty($configsInput['openai']['model_name'])) {
             $validConfigs['openai'] = [
-                'api_key' => $configs['openai']['api_key'],
-                'model_name' => $configs['openai']['model_name'],
-                'api_url' => self::OPENAI_API_BASE_URL, // URL base, model dikirim dalam payload
+                'api_key' => $configsInput['openai']['api_key'],
+                'model_name' => $configsInput['openai']['model_name'],
+                'api_url' => self::OPENAI_API_BASE_URL,
             ];
         }
         // Anthropic
-        if (!empty($configs['anthropic']['api_key']) && !empty($configs['anthropic']['model_name'])) {
+        if (!empty($configsInput['anthropic']['api_key']) && !empty($configsInput['anthropic']['model_name'])) {
             $validConfigs['anthropic'] = [
-                'api_key' => $configs['anthropic']['api_key'],
-                'model_name' => $configs['anthropic']['model_name'],
+                'api_key' => $configsInput['anthropic']['api_key'],
+                'model_name' => $configsInput['anthropic']['model_name'],
                 'api_url' => self::ANTHROPIC_API_BASE_URL,
-                'api_version' => $configs['anthropic']['api_version'] ?? '2023-06-01',
+                'api_version' => $configsInput['anthropic']['api_version'] ?? '2023-06-01',
             ];
         }
         return $validConfigs;
     }
 
+    /**
+     * Generates test cases for a given vulnerability from all configured LLM providers.
+     *
+     * @param VulnerabilityLocation $vulnerability The vulnerability details.
+     * @param array $existingTestsContext (Optional) Snippets or names of existing tests for context.
+     * @param string $testFramework (Optional) Target test framework (e.g., "PHPUnit", "Pest").
+     * @return array An arraykeyed by LLM provider name (e.g., 'gemini', 'openai'),
+     * each containing the generated test case code as a string, or null if failed for that provider.
+     * Example: ['gemini' => '<?php ... ?>', 'openai' => null, 'anthropic' => '<?php ... ?>']
+     */
     public function generateTestsForVulnerability(
         VulnerabilityLocation $vulnerability,
         array $existingTestsContext = [],
         string $testFramework = "PHPUnit"
-    ): ?string {
-        $this->logger?->info("Attempting to generate AI test case for vulnerability in {filePath} at line {lineNumber}", [
+    ): array {
+        $this->logger?->info("Attempting to generate AI test cases for vulnerability in {filePath} at line {lineNumber} using multiple LLMs.", [
             'filePath' => $vulnerability->filePath,
             'lineNumber' => $vulnerability->startLine
         ]);
 
         $prompt = $this->buildPromptForVulnerability($vulnerability, $existingTestsContext, $testFramework);
         if (!$prompt) {
-            $this->logger?->error("Failed to build prompt for AI test generation.");
-            return null;
+            $this->logger?->error("Failed to build prompt for AI test generation. No tests will be generated.");
+            return []; // Kembalikan array kosong jika prompt gagal dibuat
         }
-        $this->logger?->debug("Generated LLM Prompt:\n{prompt}", ['prompt' => $prompt]);
+        $this->logger?->debug("Generated LLM Prompt (common for all providers):\n{prompt}", ['prompt' => $prompt]);
 
-        foreach ($this->llmPreferenceOrder as $llmType) {
-            if (isset($this->llmConfigs[$llmType])) {
-                $this->logger?->info("Trying LLM provider: {llmType}", ['llmType' => $llmType]);
-                $config = $this->llmConfigs[$llmType];
-                $generatedCode = null;
+        $allGeneratedTests = [];
 
-                try {
-                    switch ($llmType) {
-                        case 'gemini':
-                            $generatedCode = $this->callGeminiApi($prompt, $config);
-                            break;
-                        case 'openai':
-                            $generatedCode = $this->callOpenAiApi($prompt, $config);
-                            break;
-                        case 'anthropic':
-                            $generatedCode = $this->callAnthropicApi($prompt, $config);
-                            break;
-                    }
+        foreach ($this->llmProvidersToTry as $llmType) {
+            // Pastikan lagi bahwa konfigurasi untuk llmType ini memang ada (seharusnya sudah difilter di konstruktor)
+            if (!isset($this->llmConfigs[$llmType])) {
+                continue;
+            }
 
-                    if ($generatedCode) {
-                        $this->logger?->info("Successfully received test case code from {llmType}.", ['llmType' => $llmType]);
-                        return $this->extractPhpCodeBlock($generatedCode);
-                    } else {
-                        $this->logger?->warning("LLM provider {llmType} returned no code or an empty response.", ['llmType' => $llmType]);
-                    }
-                } catch (Throwable $e) {
-                    $this->logger?->error("Error with LLM provider {llmType}: {errorMessage}", [
-                        'llmType' => $llmType,
-                        'errorMessage' => $e->getMessage()
-                    ]);
-                    // Jangan hentikan, coba LLM berikutnya jika ada
+            $this->logger?->info("Requesting test case from LLM provider: {llmType}", ['llmType' => $llmType]);
+            $config = $this->llmConfigs[$llmType];
+            $generatedCode = null;
+
+            try {
+                switch ($llmType) {
+                    case 'gemini':
+                        $generatedCode = $this->callGeminiApi($prompt, $config);
+                        break;
+                    case 'openai':
+                        $generatedCode = $this->callOpenAiApi($prompt, $config);
+                        break;
+                    case 'anthropic':
+                        $generatedCode = $this->callAnthropicApi($prompt, $config);
+                        break;
+                    default:
+                        $this->logger?->warning("Unknown LLM provider type configured: {llmType}", ['llmType' => $llmType]);
                 }
+
+                if ($generatedCode) {
+                    $extractedCode = $this->extractPhpCodeBlock($generatedCode);
+                    if ($extractedCode) {
+                        $allGeneratedTests[$llmType] = $extractedCode;
+                        $this->logger?->info("Successfully received and extracted test case code from {llmType}.", ['llmType' => $llmType]);
+                    } else {
+                        $allGeneratedTests[$llmType] = null; // Gagal ekstraksi kode
+                        $this->logger?->warning("LLM provider {llmType} returned a response, but PHP code block could not be extracted.", ['llmType' => $llmType]);
+                    }
+                } else {
+                    $allGeneratedTests[$llmType] = null; // Tidak ada kode atau respons kosong
+                    $this->logger?->warning("LLM provider {llmType} returned no code or an empty response.", ['llmType' => $llmType]);
+                }
+            } catch (RequestException $e) {
+                $this->logger?->error("HTTP RequestException with LLM provider {llmType}: {errorMessage}. Response: {responseBody}", [
+                    'llmType' => $llmType,
+                    'errorMessage' => $e->getMessage(),
+                    'responseBody' => $e->hasResponse() ? (string) $e->getResponse()->getBody(true) : 'No response body' // Baca stream jika ada
+                ]);
+                $allGeneratedTests[$llmType] = null;
+            } catch (Throwable $e) {
+                $this->logger?->error("Error with LLM provider {llmType}: {errorMessage}", [
+                    'llmType' => $llmType,
+                    'errorMessage' => $e->getMessage()
+                ]);
+                $allGeneratedTests[$llmType] = null;
             }
         }
 
-        $this->logger?->error("All configured LLM providers failed to generate a test case.");
-        return null;
+        if (empty($allGeneratedTests)) {
+             $this->logger?->warning("No LLM providers successfully generated a test case for this vulnerability.");
+        }
+        return $allGeneratedTests;
     }
 
     private function callGeminiApi(string $prompt, array $config): ?string
     {
         $payload = [
             'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
-            // 'generationConfig' => ['temperature' => 0.7, 'maxOutputTokens' => 2048] // Sesuaikan
+            'generationConfig' => ['temperature' => 0.5, 'maxOutputTokens' => 2048]
         ];
         $response = $this->httpClient->post($config['api_url'], [
             'query' => ['key' => $config['api_key']],
             'json' => $payload,
-            'headers' => ['Content-Type' => 'application/json']
+            'headers' => ['Content-Type' => 'application/json'],
+            'http_errors' => false // Agar Guzzle tidak throw exception untuk status 4xx/5xx
         ]);
-        $responseBody = json_decode((string) $response->getBody(), true);
+
+        $statusCode = $response->getStatusCode();
+        $responseBodyString = (string) $response->getBody();
+        $responseBody = json_decode($responseBodyString, true);
+
+        if ($statusCode >= 400) {
+            $this->logger?->error("Gemini API Error (Status: {statusCode}): {errorBody}", ['statusCode' => $statusCode, 'errorBody' => $responseBodyString]);
+            return null;
+        }
         return $responseBody['candidates'][0]['content']['parts'][0]['text'] ?? null;
     }
 
@@ -147,16 +207,25 @@ class AiTestGenerator
         $payload = [
             'model' => $config['model_name'],
             'messages' => [['role' => 'user', 'content' => $prompt]],
-            // 'temperature' => 0.7, 'max_tokens' => 2048 // Sesuaikan
+            'temperature' => 0.5, 'max_tokens' => 2048
         ];
         $response = $this->httpClient->post($config['api_url'], [
             'headers' => [
                 'Authorization' => 'Bearer ' . $config['api_key'],
                 'Content-Type' => 'application/json',
             ],
-            'json' => $payload
+            'json' => $payload,
+            'http_errors' => false
         ]);
-        $responseBody = json_decode((string) $response->getBody(), true);
+        
+        $statusCode = $response->getStatusCode();
+        $responseBodyString = (string) $response->getBody();
+        $responseBody = json_decode($responseBodyString, true);
+
+        if ($statusCode >= 400) {
+            $this->logger?->error("OpenAI API Error (Status: {statusCode}): {errorBody}", ['statusCode' => $statusCode, 'errorBody' => $responseBodyString]);
+            return null;
+        }
         return $responseBody['choices'][0]['message']['content'] ?? null;
     }
 
@@ -164,9 +233,9 @@ class AiTestGenerator
     {
         $payload = [
             'model' => $config['model_name'],
-            'max_tokens' => 2048, // Sesuaikan
+            'max_tokens' => 2048,
             'messages' => [['role' => 'user', 'content' => $prompt]],
-            // 'temperature' => 0.7 // Sesuaikan
+            'temperature' => 0.5
         ];
         $response = $this->httpClient->post($config['api_url'], [
             'headers' => [
@@ -174,13 +243,23 @@ class AiTestGenerator
                 'anthropic-version' => $config['api_version'],
                 'content-type' => 'application/json',
             ],
-            'json' => $payload
+            'json' => $payload,
+            'http_errors' => false
         ]);
-        $responseBody = json_decode((string) $response->getBody(), true);
-        // Respons Anthropic Claude v1/messages biasanya ada di 'content' -> array -> 'text'
+
+        $statusCode = $response->getStatusCode();
+        $responseBodyString = (string) $response->getBody();
+        $responseBody = json_decode($responseBodyString, true);
+
+        if ($statusCode >= 400) {
+            $this->logger?->error("Anthropic API Error (Status: {statusCode}): {errorBody}", ['statusCode' => $statusCode, 'errorBody' => $responseBodyString]);
+            return null;
+        }
+
         if (isset($responseBody['content']) && is_array($responseBody['content']) && isset($responseBody['content'][0]['text'])) {
             return $responseBody['content'][0]['text'];
         }
+        $this->logger?->warning("Anthropic API response format unexpected: {responseBody}", ['responseBody' => $responseBodyString]);
         return null;
     }
 
@@ -189,8 +268,8 @@ class AiTestGenerator
         array $existingTestsContext,
         string $testFramework
     ): string {
-        // Prompt ini bisa disesuaikan lebih lanjut per LLM jika diperlukan,
-        // tapi untuk saat ini kita gunakan prompt generik yang sama.
+        // Prompt generik, bisa disesuaikan jika ada perbedaan signifikan
+        // dalam cara masing-masing LLM merespons terhadap detail tertentu.
         $prompt = "You are an expert PHP security testing assistant.\n";
         $prompt .= "A potential vulnerability has been identified in a PHP project.\n\n";
         $prompt .= "Vulnerability Details:\n";
@@ -226,13 +305,17 @@ class AiTestGenerator
 
     private function extractPhpCodeBlock(string $rawText): ?string
     {
-        if (preg_match('/```(?:php)?\s*([\s\S]+?)\s*```/', $rawText, $matches)) {
+        if (preg_match('/```(?:php)?\s*([\s\S]+?)\s*```/s', $rawText, $matches)) { // Tambahkan modifier 's' untuk dotall
             return trim($matches[1]);
         }
-        if (str_starts_with(trim($rawText), '<?php')) { // Fallback jika tidak ada markdown block
-            return trim($rawText);
+        // Fallback jika tidak ada markdown block, tapi periksa apakah ini benar-benar kode PHP
+        $trimmedText = trim($rawText);
+        if (str_starts_with($trimmedText, '<?php') || (str_starts_with($trimmedText, 'class ') && str_contains($trimmedText, 'extends TestCase'))) {
+            return $trimmedText;
         }
-        $this->logger?->warning("Could not extract PHP code block from AI response. Response might not be code or is malformed.", ['rawResponse' => substr($rawText, 0, 200)]);
-        return $rawText; // Kembalikan mentah jika tidak ada blok, mungkin perlu inspeksi manual
+        $this->logger?->warning("Could not extract PHP code block from AI response. Response might not be code or is malformed.", ['rawResponsePreview' => substr($rawText, 0, 200)]);
+        // Kembalikan null jika tidak yakin itu adalah blok kode PHP yang valid
+        // Atau kembalikan rawText jika ingin penanganan lebih lanjut di luar kelas ini
+        return null;
     }
 }

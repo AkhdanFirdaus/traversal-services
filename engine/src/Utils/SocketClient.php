@@ -2,7 +2,7 @@
 
 use ElephantIO\Client;
 
-$url = 'http://socket:3000';
+$url = 'http://server:3000';
 // if socket server is served in non root path, adjust the url to include those path, e.g:
 // $url = 'http://localhost:8080/my'
 
