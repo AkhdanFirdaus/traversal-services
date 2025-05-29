@@ -1,9 +1,42 @@
 services:
   engine:
     container_name: traversal-engine
-    build: .
+    build: ./engine
+    command: ['php', '-S', "0.0.0.0:8080", "/app/public/server.php"]
+    ports:
+      - "8080:8080"
     volumes:
-      - ./src:/app/src
-      - ./materials:/app/materials
-      - ./logs:/app/workspace/reports
-      - ./vendor:/app/vendor
+      - ./engine/src:/app/src
+      - ./engine/bin:/app/bin
+      - ./engine/public:/app/public
+      - ./tmp:/app/tmp
+      - ./reports/engine:/app/reports
+    env_file:
+      - .env
+    environment:
+      - APP_ENV_LOADER=docker-compose
+      - TZ=Asia/Jakarta
+    networks:
+      - traversal
+
+  server:
+    container_name: traversal-server
+    build: ./server
+    volumes:
+      - ./server/src:/app/src
+      - ./logs/server:/app/logs
+    ports:
+      - "3000:3000"
+    environment:
+      - APP_ENV=development
+      - TZ=Asia/Jakarta
+    depends_on:
+      - engine
+    networks:
+      - traversal
+
+networks:
+  traversal:
+
+volumes:
+  logs:

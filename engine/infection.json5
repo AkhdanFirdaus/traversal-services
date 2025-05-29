@@ -1,0 +1,50 @@
+{
+    "source": {
+        "directories": [
+            "workspace/repo"
+        ],
+        "excludes": [
+            "vendor"
+        ]
+    },
+    "timeout": 10,
+    "logs": {
+        "text": "logs/infection.log",
+        "html": "logs/infection.html",
+        "summary": "logs/summary.log"
+    },
+    "phpUnit": {
+        "configDir": "."
+        "customTests": "workspace/generated-tests",
+        "coverage": {
+            "path": "build/coverage"
+        }
+    },
+    "mutators": {
+        "@default": true,
+        "App\\Mutator\\RandomBytesToOpenSslRandomPseudoBytes": true,
+        "App\\Mutator\\RandomBytesToRandomInt": true,
+        "App\\Mutator\\RandomBytesToMcryptCreateIv": true,
+        "App\\Mutator\\RandomBytesToMtRand": true,
+        "App\\Mutator\\HmacAlgoToMd5": true,
+        "App\\Mutator\\HmacAlgoToSha1": true,
+        "App\\Mutator\\HmacAlgoToSha512": true,
+        "App\\Mutator\\HmacAlgoToSha384": true,
+        "App\\Mutator\\HmacAlgoToBlake2b": true,
+        "App\\Mutator\\HmacAlgoToBlake2s": true,
+        "App\\Mutator\\HmacAlgoToTiger1283": true,
+        "App\\Mutator\\HmacAlgoToWhirlpool": true,
+        "App\\Mutator\\HashEqualsToStrcmp": true,
+        "App\\Mutator\\HashEqualsToStrcasecmp": true,
+        "App\\Mutator\\HashEqualsToStrcoll": true,
+        "App\\Mutator\\HashEqualsToLevenshtein": true,
+        "App\\Mutator\\OP_PP_ToEmptyString": true,
+        "App\\Mutator\\OP_AP_ToOriginalPath": true,
+        "App\\Mutator\\OP_FP_ToSimpleConcat": true,
+        "App\\Mutator\\OP_ExAP_ToTrue": true,
+        "App\\Mutator\\OP_ExFP_ToTrue": true,
+        "App\\Mutator\\OP_ExPer_ToTrue": true,
+        "App\\Mutator\\OP_ExReF_ToTrue": true,
+        "App\\Mutator\\Heuristics\\RemoveSanitization": true
+    },
+}
