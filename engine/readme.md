@@ -20,7 +20,7 @@ Fitur Utama:
 
 Berikut adalah struktur direktori dan file utama proyek:
 
-
+```
 project-root/
 │
 ├── bin/                      # Skrip CLI sebagai titik masuk aplikasi
@@ -79,7 +79,7 @@ project-root/
 ├── composer.json               # Mendefinisikan dependensi proyek dan autoloading
 ├── composer.lock               # Mencatat versi pasti dari dependensi
 └── README.md                   # File ini
-
+```
 
 ## 3. Cara Kerja Engine (Pipeline Utama)
 

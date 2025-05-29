@@ -10,19 +10,21 @@
 Directory/Path Traversal
 
 ## Engine Flow
-> [ Clone Repo ]
->        ↓
-> [ Heuristic Analysis ]
->        ↓
-> [ Run Infection #1 ] → (MSI_before)
->        ↓
-> [ AI Agent Generates Tests (for flagged code) ]
->        ↓
-> [ Run Infection #2 ] → (MSI_after)
->        ↓
-> [ Compare MSI ] → [ Select Best Tests ]
->        ↓
-> [ Package & Deliver Results ]
+```
+[ Clone Repo ]
+       ↓
+[ Heuristic Analysis ]
+       ↓
+[ Run Infection #1 ] → (MSI_before)
+       ↓
+[ AI Agent Generates Tests (for flagged code) ]
+       ↓
+[ Run Infection #2 ] → (MSI_after)
+       ↓
+[ Compare MSI ] → [ Select Best Tests ]
+       ↓
+[ Package & Deliver Results ]
+```
 
 ## Usage Socket
 1. `docker compose run -it socket /bin/bash`
