@@ -1,102 +1,136 @@
 <?php
 
-declare(strict_types=1);
+namespace Pipeline;
 
-namespace App\Pipeline;
-
-use App\Utils\Logger;
+use Utils\Logger;
 
 class TestSelector
 {
-    private ?Logger $logger;
+    public function __construct(
+        private Logger $logger
+    ) {}
 
-    public function __construct(?Logger $logger = null)
+    public function select(array $testCases): array
     {
-        $this->logger = $logger;
-    }
+        $this->logger->info("Starting test case selection", [
+            'totalCases' => count($testCases)
+        ]);
 
-    /**
-     * Selects the "best" test cases based on certain criteria.
-     * This is a placeholder and needs more sophisticated logic.
-     *
-     * @param array $generatedTests An array of generated test case data.
-     * Each element could be an array/object with:
-     * 'code' => string (the test code)
-     * 'source_vulnerability' => VulnerabilityLocation (optional)
-     * 'killed_mutants_count' => int (optional, from Infection run after adding this test)
-     * 'msi_improvement' => float (optional)
-     * @param float $minMsiImprovementThreshold Minimum MSI improvement to consider a test "good".
-     * @param int $minKilledMutantsThreshold Minimum number of new mutants killed.
-     * @return array An array of selected test case data.
-     */
-    public function selectBestTests(
-        array $generatedTests,
-        float $minMsiImprovementThreshold = 1.0,
-        int $minKilledMutantsThreshold = 1
-    ): array {
-        $this->logger?->info("Starting test selection process for {count} generated tests.", ['count' => count($generatedTests)]);
         $selectedTests = [];
 
-        if (empty($generatedTests)) {
-            $this->logger?->info("No generated tests to select from.");
-            return [];
-        }
-
-        // Example selection logic:
-        // 1. Prioritize tests that show significant MSI improvement.
-        // 2. Prioritize tests that kill a notable number of previously surviving mutants.
-        // 3. Ensure tests are syntactically valid (this should ideally happen before selection).
-        // This current implementation is very basic and assumes such data is pre-calculated.
-
-        foreach ($generatedTests as $testData) {
-            $isGoodTest = false;
-            $reasons = [];
-
-            // Assume $testData is an array with 'code' and potentially 'msi_improvement' or 'killed_mutants_count'
-            if (!isset($testData['code']) || empty($testData['code'])) {
-                $this->logger?->warning("Skipping test data due to missing code.", ['testData' => $testData]);
+        foreach ($testCases as $testCase) {
+            if (!$testCase) {
                 continue;
             }
 
-            if (isset($testData['msi_improvement']) && $testData['msi_improvement'] >= $minMsiImprovementThreshold) {
-                $isGoodTest = true;
-                $reasons[] = "MSI improvement of {$testData['msi_improvement']}% >= threshold {$minMsiImprovementThreshold}%";
-            }
-
-            if (isset($testData['killed_mutants_count']) && $testData['killed_mutants_count'] >= $minKilledMutantsThreshold) {
-                $isGoodTest = true;
-                $reasons[] = "Killed {$testData['killed_mutants_count']} mutants >= threshold {$minKilledMutantsThreshold}";
-            }
-            
-            // If no specific metrics, select all valid tests for now (assuming they passed earlier validation)
-            if (empty($reasons) && !isset($testData['msi_improvement']) && !isset($testData['killed_mutants_count'])) {
-                 $isGoodTest = true; // Default to selecting if no metrics are available
-                 $reasons[] = "Selected by default (no specific metrics available for filtering)";
-            }
-
-
-            if ($isGoodTest) {
-                $this->logger?->info("Selected test. Reasons: {reasons}", ['reasons' => implode(', ', $reasons)]);
-                // Add more context to selected test if needed
-                $selectedTests[] = $testData; // Store the whole test data array
-            } else {
-                 $this->logger?->info("Test not selected (did not meet criteria). Provided metrics: MSI imp. {msi_imp}, Killed mut. {killed_mut}", [
-                    'msi_imp' => $testData['msi_improvement'] ?? 'N/A',
-                    'killed_mut' => $testData['killed_mutants_count'] ?? 'N/A'
-                 ]);
+            $selected = $this->selectBestResponse($testCase);
+            if ($selected) {
+                $selectedTests[] = $selected;
             }
         }
 
-        $this->logger?->info("Selected {selectedCount} out of {totalCount} generated tests.", [
-            'selectedCount' => count($selectedTests),
-            'totalCount' => count($generatedTests)
+        $this->logger->info("Test case selection completed", [
+            'selectedTests' => count($selectedTests)
         ]);
+
         return $selectedTests;
     }
 
-    // TODO: Implement more sophisticated selection strategies:
-    // - Ranking tests based on multiple factors.
-    // - Considering test execution time if available.
-    // - Avoiding redundant tests if they cover the same mutants/vulnerabilities.
-    // - Validating test syntax and basic runnability before selection.
-}
+    private function selectBestResponse(array $testCase): ?array
+    {
+        $responses = $testCase['testCases'] ?? [];
+        if (empty($responses)) {
+            return null;
+        }
+
+        // Score each response
+        $scores = [];
+        foreach ($responses as $model => $response) {
+            $scores[$model] = $this->scoreResponse($response, $testCase);
+        }
+
+        // Get the model with the highest score
+        arsort($scores);
+        $bestModel = key($scores);
+
+        if (!$bestModel) {
+            return null;
+        }
+
+        return [
+            'type' => $testCase['type'],
+            'source' => $testCase['type'] === 'vulnerability' 
+                ? $testCase['vulnerability'] 
+                : $testCase['mutant'],
+            'selectedModel' => $bestModel,
+            'testCode' => $responses[$bestModel]
+        ];
+    }
+
+    private function scoreResponse(string $response, array $testCase): int
+    {
+        $score = 0;
+
+        // Check if response contains PHP code
+        if (strpos($response, '<?php') !== false || 
+            strpos($response, 'class') !== false || 
+            strpos($response, 'function test') !== false) {
+            $score += 10;
+        }
+
+        // Check for PHPUnit specific content
+        if (strpos($response, 'extends TestCase') !== false) {
+            $score += 5;
+        }
+
+        if (strpos($response, 'assert') !== false) {
+            $score += 5;
+        }
+
+        // Check for test method declarations
+        if (preg_match_all('/public function test\w+/i', $response, $matches)) {
+            $score += count($matches[0]) * 2;
+        }
+
+        // Check for proper setup/teardown
+        if (strpos($response, 'setUp') !== false) {
+            $score += 3;
+        }
+        if (strpos($response, 'tearDown') !== false) {
+            $score += 3;
+        }
+
+        // Check for docblocks
+        if (strpos($response, '/**') !== false) {
+            $score += 2;
+        }
+
+        // Check for test data providers
+        if (strpos($response, '@dataProvider') !== false) {
+            $score += 5;
+        }
+
+        // Specific checks based on test type
+        if ($testCase['type'] === 'vulnerability') {
+            // Check for security-related assertions
+            if (strpos($response, 'assertFalse') !== false || 
+                strpos($response, 'assertThrows') !== false) {
+                $score += 5;
+            }
+
+            // Check for path traversal specific tests
+            if (strpos($response, '../') !== false || 
+                strpos($response, '..\\') !== false) {
+                $score += 5;
+            }
+        } else { // Mutation test
+            // Check if both original and mutated cases are tested
+            if (strpos($response, $testCase['mutant']['originalCode']) !== false &&
+                strpos($response, $testCase['mutant']['replacement']) !== false) {
+                $score += 10;
+            }
+        }
+
+        return $score;
+    }
+} 

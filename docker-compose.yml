@@ -6,25 +6,28 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./engine/src:/app/src
-      - ./engine/bin:/app/bin
-      - ./engine/public:/app/public
-      - ./tmp:/app/tmp
+      - ./engine:/app
       - ./reports/engine:/app/reports
+      - ./tmp:/app/tmp
     env_file:
       - .env
     environment:
       - APP_ENV_LOADER=docker-compose
       - TZ=Asia/Jakarta
+      - APP_ENV=development
+      - APP_DEBUG=true
+      - XDEBUG_MODE=coverage,debug
+      - SOCKET_HOST=socket
+      - SOCKET_PORT=3000
     networks:
       - traversal
 
-  server:
-    container_name: traversal-server
-    build: ./server
+  socket:
+    container_name: traversal-socket
+    build: ./socket
     volumes:
-      - ./server/src:/app/src
-      - ./logs/server:/app/logs
+      - ./socket:/app
+      - ./reports/socket:/app/logs
     ports:
       - "3000:3000"
     environment:

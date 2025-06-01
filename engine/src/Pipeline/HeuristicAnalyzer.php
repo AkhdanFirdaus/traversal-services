@@ -1,159 +1,103 @@
 <?php
 
-declare(strict_types=1);
+namespace Pipeline;
 
-namespace App\Pipeline;
-
-use App\AST\TraversalVisitor;
-use App\AST\VulnerabilityLocation;
-use App\AST\Rules\CWE22_DirectUserInputInSinkRule;
-use App\AST\Rules\CWE22_ConcatenatedPathWithUserInputRule;
-use App\AST\Rules\GenericPatternRule;
-use App\Utils\FileHelper;
-use App\Utils\Logger;
-use App\Utils\PatternLoader;
-use PhpParser\ParserFactory;
+use AST\TraversalVisitor;
 use PhpParser\NodeTraverser;
-use PhpParser\Error as ParserError;
-use Throwable;
+use PhpParser\ParserFactory;
+use PhpParser\Parser;
+use Utils\Logger;
+use Utils\SocketNotifier;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 
 class HeuristicAnalyzer
 {
-    private \PhpParser\Parser $parser;
-    private array $rules = [];
-    private ?Logger $logger;
-    private PatternLoader $patternLoader;
+    private Parser $parser;
+    private NodeTraverser $traverser;
+    private TraversalVisitor $visitor;
 
-    public function __construct(?Logger $logger = null, ?PatternLoader $patternLoader = null, string $patternsJsonPath = '')
-    {
-        $this->logger = $logger;
-        $this->patternLoader = $patternLoader ?? new PatternLoader($this->logger);
-
-        $parserFactory = new ParserFactory();
-        // Use LATEST for broader compatibility, or specify PHP8 if your target is strictly 8+
-        $this->parser = $parserFactory->createForNewestSupportedVersion();
-
-        $this->initializeRules($patternsJsonPath);
+    public function __construct(
+        private Logger $logger,
+        private SocketNotifier $notifier
+    ) {
+        $this->parser = (new ParserFactory)->create(ParserFactory::PREFER_PHP7);
+        $this->traverser = new NodeTraverser();
+        $this->visitor = new TraversalVisitor();
+        $this->traverser->addVisitor($this->visitor);
     }
 
-    private function initializeRules(string $patternsJsonPath): void
+    public function analyze(string $targetDir): array
     {
-        // Add built-in, code-defined rules
-        $this->rules[] = new CWE22_DirectUserInputInSinkRule();
-        $this->rules[] = new CWE22_ConcatenatedPathWithUserInputRule();
+        $this->logger->info("Starting heuristic analysis", ['dir' => $targetDir]);
+        $this->notifier->sendUpdate("Starting code analysis", 25);
 
-        // Load rules from patterns.json if path is provided
-        if (!empty($patternsJsonPath)) {
-            $loadedPatternDefinitions = $this->patternLoader->loadPatterns($patternsJsonPath);
-            foreach ($loadedPatternDefinitions as $patternDef) {
-                if (isset($patternDef['cwe'], $patternDef['name'], $patternDef['patterns']) && is_array($patternDef['patterns'])) {
-                    $this->rules[] = new GenericPatternRule($patternDef);
-                    $this->logger?->debug("Initialized GenericPatternRule: {ruleName}", ['ruleName' => $patternDef['name']]);
-                } else {
-                    $this->logger?->warning("Skipped invalid pattern definition: {patternDefinition}", ['patternDefinition' => json_encode($patternDef)]);
-                }
-            }
-        } else {
-            $this->logger?->info("No patterns.json path provided to HeuristicAnalyzer, skipping generic pattern rules.");
-        }
-        $this->logger?->info("HeuristicAnalyzer initialized with {ruleCount} rules.", ['ruleCount' => count($this->rules)]);
-    }
+        $vulnerabilities = [];
+        $fileCount = 0;
+        $analyzedCount = 0;
 
-    /**
-     * Analyzes a single PHP file for vulnerabilities.
-     *
-     * @param string $filePath Path to the PHP file.
-     * @return VulnerabilityLocation[] An array of found vulnerabilities.
-     */
-    public function analyzeFile(string $filePath): array
-    {
-        $this->logger?->info("Starting heuristic analysis for file: {filePath}", ['filePath' => $filePath]);
-        $code = FileHelper::readFile($filePath, $this->logger);
-        if ($code === null) {
-            return []; // Error already logged by FileHelper or here
-        }
-        return $this->analyzeCode($code, $filePath);
-    }
-
-    /**
-     * Analyzes a string of PHP code for vulnerabilities.
-     *
-     * @param string $code The PHP code string.
-     * @param string $pseudoFilePath A path to associate with the code (for reporting).
-     * @return VulnerabilityLocation[] An array of found vulnerabilities.
-     */
-    public function analyzeCode(string $code, string $pseudoFilePath = 'virtual.php'): array
-    {
-        try {
-            $ast = $this->parser->parse($code);
-        } catch (ParserError $e) {
-            $this->logger?->error("Parse error in {filePath}: {errorMessage}", ['filePath' => $pseudoFilePath, 'errorMessage' => $e->getMessage()]);
-            return [];
-        } catch (Throwable $e) {
-            $this->logger?->error("Unexpected error during parsing of {filePath}: {errorMessage}", ['filePath' => $pseudoFilePath, 'errorMessage' => $e->getMessage()]);
-            return [];
-        }
-
-
-        if ($ast === null) { // Should be caught by try-catch but as a safeguard
-            $this->logger?->error("AST is null after parsing {filePath}, cannot analyze.", ['filePath' => $pseudoFilePath]);
-            return [];
-        }
-
-        $traverser = new NodeTraverser();
-        // Pass the file path and content to the visitor for context and snippet generation
-        $visitor = new TraversalVisitor($this->rules, $pseudoFilePath, $code);
-        $traverser->addVisitor($visitor);
-
-        try {
-            $traverser->traverse($ast);
-        } catch (Throwable $e) {
-            $this->logger?->error("Error during AST traversal in {filePath}: {errorMessage}", ['filePath' => $pseudoFilePath, 'errorMessage' => $e->getMessage()]);
-            // Optionally, return partial results if visitor collected some before erroring
-            // return $visitor->getVulnerabilities();
-            return [];
-        }
-
-        $vulnerabilities = $visitor->getVulnerabilities();
-        $this->logger?->info("Heuristic analysis of {filePath} found {count} potential vulnerabilities.", [
-            'filePath' => $pseudoFilePath,
-            'count' => count($vulnerabilities)
-        ]);
-        return $vulnerabilities;
-    }
-
-    /**
-     * Analyzes all PHP files in a given directory recursively.
-     *
-     * @param string $directoryPath Path to the directory.
-     * @return array An associative array where keys are file paths and values are arrays of VulnerabilityLocation.
-     */
-    public function analyzeDirectory(string $directoryPath): array
-    {
-        $this->logger?->info("Starting heuristic analysis for directory: {directoryPath}", ['directoryPath' => $directoryPath]);
-        $allVulnerabilities = [];
-        if (!is_dir($directoryPath)) {
-            $this->logger?->error("Directory not found: {directoryPath}", ['directoryPath' => $directoryPath]);
-            return [];
-        }
-
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($directoryPath, \RecursiveDirectoryIterator::SKIP_DOTS)
+        // Find all PHP files
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($targetDir)
         );
 
+        // First count total PHP files
         foreach ($iterator as $file) {
-            /** @var \SplFileInfo $file */
-            if ($file->isFile() && strtolower($file->getExtension()) === 'php') {
-                $filePath = $file->getRealPath();
-                if ($filePath) {
-                    $fileVulnerabilities = $this->analyzeFile($filePath);
-                    if (!empty($fileVulnerabilities)) {
-                        $allVulnerabilities[$filePath] = $fileVulnerabilities;
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                $fileCount++;
+            }
+        }
+
+        // Reset iterator
+        $iterator->rewind();
+
+        // Analyze each PHP file
+        foreach ($iterator as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                $analyzedCount++;
+                $progress = 25 + (($analyzedCount / $fileCount) * 25);
+                // $this->notifier->sendUpdate(
+                //     "Analyzing file {$analyzedCount} of {$fileCount}",
+                //     (int)$progress
+                // );
+
+                try {
+                    $code = file_get_contents($file->getPathname());
+                    $ast = $this->parser->parse($code);
+                    
+                    if ($ast !== null) {
+                        // Reset visitor state
+                        $this->visitor->reset();
+                        
+                        // Traverse the AST
+                        $this->traverser->traverse($ast);
+                        
+                        // Get vulnerabilities found in this file
+                        $fileVulnerabilities = $this->visitor->getVulnerabilities();
+                        
+                        if (!empty($fileVulnerabilities)) {
+                            $vulnerabilities[$file->getPathname()] = array_map(
+                                fn($v) => $v->toArray(),
+                                $fileVulnerabilities
+                            );
+                        }
                     }
+                } catch (\Throwable $e) {
+                    $this->logger->warning("Failed to analyze file", [
+                        'file' => $file->getPathname(),
+                        'error' => $e->getMessage()
+                    ]);
                 }
             }
         }
-        $this->logger?->info("Heuristic analysis of directory {directoryPath} completed.", ['directoryPath' => $directoryPath]);
-        return $allVulnerabilities;
+
+        $this->logger->info("Heuristic analysis completed", [
+            'filesAnalyzed' => $analyzedCount,
+            'vulnerabilitiesFound' => count($vulnerabilities)
+        ]);
+
+        $this->notifier->sendUpdate("Code analysis completed", 50);
+
+        return $vulnerabilities;
     }
-}
+} 

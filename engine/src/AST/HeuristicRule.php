@@ -1,50 +1,68 @@
 <?php
 
-declare(strict_types=1);
-
-namespace App\AST;
+namespace AST;
 
 use PhpParser\Node;
-use PhpParser\Node\Expr;
 
-/**
- * Interface for all heuristic rules used in AST analysis.
- */
-interface HeuristicRule
+abstract class HeuristicRule
 {
-    /**
-     * Checks if this rule applies to the given AST expression within a sink function.
-     *
-     * @param Expr $expression The expression being analyzed (e.g., an argument to a sink function).
-     * @param string $sinkFunction The name of the sink function (e.g., "include", "file_get_contents").
-     * @param Node $originalSinkNode The original AST node representing the sink (e.g., FuncCall, Include_).
-     * This provides context like line numbers.
-     * @param array $fileLines Array of lines from the source file, for snippet extraction.
-     * @return VulnerabilityLocation|null A VulnerabilityLocation object if the rule applies and detects
-     * a potential vulnerability, null otherwise.
-     */
-    public function apply(
-        Expr $expression,
-        string $sinkFunction,
-        Node $originalSinkNode,
-        array $fileLines
-    ): ?VulnerabilityLocation;
+    abstract public function matches(Node $node): bool;
+    abstract public function getId(): string;
+    abstract public function getDescription(): string;
 
-    /**
-     * Gets the CWE ID associated with this rule (e.g., "CWE-22").
-     * @return string
-     */
-    public function getCweId(): string;
+    protected function isUserInput(Node $node): bool
+    {
+        if ($node instanceof Node\Expr\ArrayDimFetch) {
+            if ($node->var instanceof Node\Expr\Variable) {
+                $varName = $node->var->name;
+                return in_array($varName, ['_GET', '_POST', '_REQUEST', '_FILES']);
+            }
+        }
+        return false;
+    }
 
-    /**
-     * Gets a human-readable name for this rule.
-     * @return string
-     */
-    public function getRuleName(): string;
+    protected function isDangerousFunction(Node\Expr\FuncCall $node): bool
+    {
+        if ($node->name instanceof Node\Name) {
+            $functionName = $node->name->toString();
+            return in_array($functionName, [
+                'file_get_contents',
+                'fopen',
+                'file',
+                'readfile',
+                'unlink',
+                'rmdir',
+                'mkdir',
+                'rename',
+                'copy',
+                'include',
+                'include_once',
+                'require',
+                'require_once'
+            ]);
+        }
+        return false;
+    }
 
-    /**
-     * Gets a detailed description of what this rule checks for.
-     * @return string
-     */
-    public function getRuleDescription(): string;
-}
+    protected function containsTraversalPattern(string $value): bool
+    {
+        $patterns = [
+            '/\.\.[\\\\\\/]/',
+            '/\\/\.\./',
+            '/\.\.%2f/i',
+            '/%2f\.\./i',
+            '/\.\.\//',
+            '/\/\.\./',
+            '/\.\./',
+            '/\.\.\\\\/',
+            '/\.\.$/'
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+} 

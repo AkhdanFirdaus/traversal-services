@@ -1,44 +1,41 @@
 {
-  "name": "engine/traversal-services",
-  "description": "Test case generation system with heuristic vulnerability detection.",
-  "type": "project",
-  "license": "MIT",
-  "autoload": {
-    "psr-4": {
-      "App\\": "src/",
-      "App\\Engine\\": "src/engine/",
-      "App\\Mutator\\": "src/custom-mutators/"
-    }
-  },
-  "require": {
-    "infection/mutator": "^0.4.0",
-    "nikic/php-parser": "^5.4",
-    "elephantio/elephant.io": "^4.13",
-    "google-gemini-php/client": "^2.1",
-    "symfony/process": "^6.0 || ^7.0",
-    "guzzlehttp/guzzle": "^7.0",
-    "nyholm/psr7": "^1.8",
-    "psr/http-client": "^1.0",
-    "mozex/anthropic-php": "^1.1",
-    "openai-php/client": "^0.13.0",
-    "vlucas/phpdotenv": "^5.6",
-    "psr/log": "^1.1 || ^2.0 || ^3.0"
-  },
-  "require-dev": {
-    "phpunit/phpunit": "^11.5",
-    "infection/infection": "^0.29.10"
-  },
-  "config": {
-      "allow-plugins": {
-      "infection/extension-installer": true,
-      "php-http/discovery": true
-    }
-  },
-  "scripts": {
-      "start": "php bin/run.php",
-      "test": "phpunit",
-      "infection": "infection --threads=4 --min-msi=60",
-      "analyze-file": "php bin/run.php analyze-file",
-      "serve": "php -S localhost:8080 -t public public/server.php"
-  }
+    "name": "security/php-test-generator",
+    "description": "A comprehensive engine designed to analyze PHP projects, detect security vulnerabilities, and automatically generate test cases using various LLMs",
+    "type": "project",
+    "require": {
+        "php": "^8.2",
+        "elephantio/elephant.io": "^4.0",
+        "guzzlehttp/guzzle": "^7.8",
+        "infection/infection": "^0.27",
+        "nikic/php-parser": "^4.17",
+        "psr/log": "^3.0",
+        "symfony/process": "^7.3",
+        "vlucas/phpdotenv": "^5.6"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/App/",
+            "Pipeline\\": "src/Pipeline/",
+            "AST\\": "src/AST/",
+            "Utils\\": "src/Utils/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "infection/extension-installer": true
+        }
+    },
+    "minimum-stability": "stable"
 }

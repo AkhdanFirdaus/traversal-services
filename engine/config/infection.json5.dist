@@ -1,0 +1,33 @@
+{
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": [
+            "src",
+            "tests"
+        ],
+        "excludes": [
+            "vendor"
+        ]
+    },
+    "logs": {
+        "text": "infection.log",
+        "html": "infection.html",
+        "summary": "summary.log",
+        "json": "infection-report.json",
+        "perMutator": "per-mutator.md"
+    },
+    "mutators": {
+        "@default": true,
+        "@function_signature": false,
+        "TrueValue": {
+            "ignore": [
+                "NameSpace\\*\\*::methodName"
+            ]
+        }
+    },
+    "testFramework": "phpunit",
+    "bootstrap": "./vendor/autoload.php",
+    "phpUnit": {
+        "configDir": "."
+    }
+} 

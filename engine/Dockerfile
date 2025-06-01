@@ -1,38 +1,42 @@
-# use php latest stable image with minimal dependencies
-FROM php:8.2
+FROM php:8.2-cli
 
-# install dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git unzip zip git curl \
-    libzip-dev libpng-dev libjpeg-dev \
-    libfreetype6-dev libxml2-dev libonig-dev \
-    libevent-dev libssl-dev libevent-dev \
-    && rm -rf /var/lib/apt/lists/*
-    
-# # Install PHP extensions required by PHPUnit & Infection
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd zip xml mbstring sockets pcntl
-
-# install event
-RUN pecl install event \
-    && docker-php-ext-enable --ini-name zz-event.ini event
+    git \
+    unzip \
+    libzip-dev \
+    && docker-php-ext-install zip
 
 # install xdebug
 RUN pecl install xdebug \
     && docker-php-ext-enable xdebug
 
-# install composer
+# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# set working directory
+# Set working directory
 WORKDIR /app
 
-# Copy all files
-COPY . .
+# Copy composer files
+COPY composer.json composer.lock ./
 
 # Install dependencies
-RUN composer install --no-interaction --prefer-dist
+RUN composer install --no-dev --no-scripts --no-autoloader
 
-# Ensure bin scripts are executable
-RUN chmod +x vendor/bin/phpunit vendor/bin/infection || true
+# Copy the rest of the application
+COPY . .
 
+# Generate optimized autoload files
+RUN composer dump-autoload --optimize
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/tmp/clones_cli /app/tmp/clones_api \
+    /app/reports/heuristic_analysis /app/reports/msi_reports \
+    /app/reports/exported_test_cases_cli /app/reports/exported_test_cases_api \
+    && chmod -R 777 /app/tmp /app/reports
+
+# Set environment variables
+ENV APP_ENV=production
+
+# Command to run the application
+CMD ["php", "bin/run.php"] 
