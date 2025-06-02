@@ -16,17 +16,11 @@ class InfectionRunner
 
     public function run(string $targetDir): array
     {
-        $this->logger->info("Starting Infection run", ['dir' => $targetDir]);
-        $this->notifier->sendUpdate("Starting mutation testing", 55);
-
-        // Change to target directory
-        $currentDir = getcwd();
-        
         $this->logger->info("Changing directory to target", ['targetDir' => $targetDir]);
-
+        
+        $currentDir = getcwd();
         chdir($targetDir);
 
-        // Check for existing Infection config
         $this->setupPhpUnitConfig($targetDir);
         $configFile = $this->setupInfectionConfig($targetDir);
         
@@ -34,11 +28,12 @@ class InfectionRunner
         $command = ['/app/vendor/bin/infection', '--no-interaction', '--configuration=' . $configFile];
 
         $this->logger->info("Running Infection command", ['command' => implode(' ', $command)]);
-
+        
         $process = new Process($command);
         $process->setTimeout(3600);
-            
+        
         try {
+            $this->notifier->sendUpdate("Starting mutation testing", 55);
             $process->run();
             $stdOutput = $process->getOutput();
             $stdError = $process->getErrorOutput();
@@ -147,7 +142,6 @@ XML;
 
         $content = FileHelper::readFile($outputDir . '/infection-report.json', $this->logger);
 
-        // Parse from infection-report.json
         if ($content) {
             $report = json_decode($content, true);
             
@@ -166,7 +160,6 @@ XML;
                             'file' => $mutant['originalFilePath'],
                             'line' => $mutant['originalStartLine'],
                             'mutator' => $mutant['mutatorName'],
-                            // 'originalSourceCode' => $this->extractOriginalCode($mutant['originalSourceCode'], $mutant['originalStartLine'])
                             'originalSourceCode' => $mutant['originalSourceCode'],
                             'mutatedSourceCode' => $mutant['mutatedSourceCode'],
                         ]);
@@ -178,22 +171,5 @@ XML;
         }
 
         return $results;
-    }
-
-    private function extractOriginalCode(string $file, int $line, int $context = 3): string
-    {
-        if (!file_exists($file) || $line <= 0) {
-            return '';
-        }
-
-        $lines = file($file);
-        if (!$lines) {
-            return '';
-        }
-
-        $start = max(0, $line - $context - 1);
-        $end = min(count($lines), $line + $context);
-        
-        return implode('', array_slice($lines, $start, $end - $start));
     }
 } 

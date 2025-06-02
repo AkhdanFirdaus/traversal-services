@@ -59,7 +59,7 @@ class AppService
             $initialMsi = $infectionRunner->run($repoPath);
 
             // Step 4: Generate AI Test Cases
-            $generator = new AiTestGenerator($this->logger, $this->notifier);
+            $generator = new AiTestGenerator($this->logger, $this->notifier, $repoPath);
             $testCases = $generator->generate($vulnerabilities, $initialMsi['escapedMutants']);
 
             // Step 5: Select and Export Tests

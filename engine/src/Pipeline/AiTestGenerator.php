@@ -14,7 +14,8 @@ class AiTestGenerator
 
     public function __construct(
         private Logger $logger,
-        private SocketNotifier $notifier
+        private SocketNotifier $notifier,
+        private string $repoPath,
     ) {
         $this->client = new Client([
             'timeout' => (int)($_ENV['MODEL_TIMEOUT'] ?? 30)
@@ -41,7 +42,8 @@ class AiTestGenerator
         // Generate tests for escaped mutants
         foreach ($escapedMutants as $key => $mutant) {
             $this->logger->info("Generating test case for mutant-" . $key, $mutant);
-            $testCases[] = $this->generateMutationTestCase($mutant);
+            $generatedTest = $this->generateMutationTestCase($mutant);
+            $testCases[] = $generatedTest;
         }
 
         $this->notifier->sendUpdate("Test generation completed", 90);
@@ -49,27 +51,27 @@ class AiTestGenerator
         return array_filter($testCases); // Remove any null results
     }
 
-    private function generateTestCase(string $file, array $vulnerability): ?array
-    {
-        try {
-            $prompt = $this->buildVulnerabilityPrompt($file, $vulnerability);
-            $responses = $this->getResponsesFromLLMs($prompt);
+    // private function generateTestCase(string $file, array $vulnerability): ?array
+    // {
+    //     try {
+    //         $prompt = $this->buildVulnerabilityPrompt($file, $vulnerability);
+    //         $responses = $this->getResponsesFromLLMs($prompt);
 
-            return [
-                'type' => 'vulnerability',
-                'file' => $file,
-                'vulnerability' => $vulnerability,
-                'testCases' => $responses
-            ];
+    //         return [
+    //             'type' => 'vulnerability',
+    //             'file' => $file,
+    //             'vulnerability' => $vulnerability,
+    //             'testCases' => $responses
+    //         ];
 
-        } catch (\Exception $e) {
-            $this->logger->error("Failed to generate test case", [
-                'file' => $file,
-                'error' => $e->getMessage()
-            ]);
-            return null;
-        }
-    }
+    //     } catch (\Exception $e) {
+    //         $this->logger->error("Failed to generate test case", [
+    //             'file' => $file,
+    //             'error' => $e->getMessage()
+    //         ]);
+    //         return null;
+    //     }
+    // }
 
     private function generateMutationTestCase(array $mutant): ?array
     {
@@ -92,27 +94,27 @@ class AiTestGenerator
         }
     }
 
-    private function buildVulnerabilityPrompt(string $file, array $vulnerability): string
-    {
-        return <<<EOT
-Generate a PHPUnit test case for the following potential security vulnerability:
+//     private function buildVulnerabilityPrompt(string $file, array $vulnerability): string
+//     {
+//         return <<<EOT
+// Generate a PHPUnit test case for the following potential security vulnerability:
 
-File: {$file}
-Line: {$vulnerability['line']}
-Rule ID: {$vulnerability['ruleId']}
-Description: {$vulnerability['description']}
+// File: {$file}
+// Line: {$vulnerability['line']}
+// Rule ID: {$vulnerability['ruleId']}
+// Description: {$vulnerability['description']}
 
-Relevant code:
-{$vulnerability['sourceCode']}
+// Relevant code:
+// {$vulnerability['sourceCode']}
 
-Requirements:
-1. The test should verify that the code is vulnerable to path traversal
-2. Include both positive and negative test cases
-3. Use realistic input data
-4. Follow PHPUnit best practices
-5. Include proper assertions
-EOT;
-    }
+// Requirements:
+// 1. The test should verify that the code is vulnerable to path traversal
+// 2. Include both positive and negative test cases
+// 3. Use realistic input data
+// 4. Follow PHPUnit best practices
+// 5. Include proper assertions
+// EOT;
+//     }
 
     private function buildMutationPrompt(array $mutant): string
     {
@@ -152,11 +154,6 @@ EOT;
                     'max_tokens' => (int)($_ENV['MAX_TOKENS'] ?? 2000)
                 ];
                 $responses['gpt'] = $this->callOpenAI($prompt, $config);
-                
-                if (isset($responses['gpt'])) {
-                    FileHelper::writeFile(getcwd() .'/results/openai_response'. uniqid() .'.txt', $responses['gpt'], $this->logger);
-                }
-
             } catch (GuzzleException $e) {
                 $this->logger->warning("OpenAI API call failed", ['error' => $e->getMessage()]);
             }
@@ -173,11 +170,6 @@ EOT;
                     'max_tokens' => (int)($_ENV['MAX_TOKENS'] ?? 2000)
                 ];
                 $responses['claude'] = $this->callAnthropic($prompt, $config);
-
-                if (isset($responses['claude'])) {
-                    FileHelper::writeFile(getcwd() .'/results/anthropic_response'. uniqid() .'.txt', $responses['claude'], $this->logger);
-                }
-
             } catch (GuzzleException $e) {
                 $this->logger->warning("Anthropic API call failed", ['error' => $e->getMessage()]);
             }
@@ -189,16 +181,11 @@ EOT;
                 $config = [
                     'api_key' => $_ENV['GEMINI_API_KEY'],
                     'model_name' => $_ENV['GEMINI_MODEL_NAME'],
-                    'api_url' => "https://generativelanguage.googleapis.com/v1beta/models/",
+                    'api_url' => "https://generativelanguage.googleapis.com/v1beta/models/" . $_ENV['GEMINI_MODEL_NAME'] . ":generateContent",
                     'temperature' => $_ENV['TEMPERATURE'] ?? 0.5,
                     'max_tokens' => (int)($_ENV['MAX_TOKENS'] ?? 2000)
                 ];
                 $responses['gemini'] = $this->callGemini($prompt, $config);
-
-                if (isset($responses['gemini'])) {
-                    FileHelper::writeFile(getcwd() .'/results/gemini_response'. uniqid() .'.txt', $responses['gemini'], $this->logger);
-                }
-                
             } catch (GuzzleException $e) {
                 $this->logger->warning("Gemini API call failed", ['error' => $e->getMessage()]);
             }

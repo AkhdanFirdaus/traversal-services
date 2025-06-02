@@ -12,13 +12,10 @@ services:
     env_file:
       - .env
     environment:
-      - APP_ENV_LOADER=docker-compose
-      - TZ=Asia/Jakarta
-      - APP_ENV=development
-      - APP_DEBUG=true
       - XDEBUG_MODE=coverage,debug
-      - SOCKET_HOST=socket
-      - SOCKET_PORT=3000
+      - TZ=Asia/Jakarta
+    depends_on:
+      - socket
     networks:
       - traversal
 
@@ -33,8 +30,6 @@ services:
     environment:
       - APP_ENV=development
       - TZ=Asia/Jakarta
-    depends_on:
-      - engine
     networks:
       - traversal
 
