@@ -11,18 +11,24 @@ class InfectionRunner
 {
     public function __construct(
         private Logger $logger,
-        private SocketNotifier $notifier
-    ) {}
+        private SocketNotifier $notifier,
+        private string $repoDir,
+        private string $testDir,
+        private bool $isFinal = false,
+    ) {
+        // make sure the directory exists
+        if (!is_dir($repoDir . '/mutated_tests')) {
+            mkdir($repoDir . '/mutated_tests', 0777, true);
+        }
+    }
 
-    public function run(string $targetDir): array
+    public function run(): array
     {
-        $this->logger->info("Changing directory to target", ['targetDir' => $targetDir]);
+        $this->logger->info("Changing directory to target", ['targetDir' => $this->repoDir]);
         
-        $currentDir = getcwd();
-        chdir($targetDir);
-
-        $this->setupPhpUnitConfig($targetDir);
-        $configFile = $this->setupInfectionConfig($targetDir);
+        
+        $this->setupPhpUnitConfig();
+        $configFile = $this->setupInfectionConfig();
         
         // Run Infection
         $command = ['/app/vendor/bin/infection', '--no-interaction', '--configuration=' . $configFile];
@@ -50,7 +56,7 @@ class InfectionRunner
             ]);
 
             // Parse results
-            $results = $this->parseResults('/app/' . $targetDir . '/result');
+            $results = $this->parseResults($this->repoDir . '/result');
 
         } catch (\RuntimeException $e) {
             $this->logger->error($e->getMessage(), [
@@ -60,34 +66,36 @@ class InfectionRunner
                 'trace' => $e->getTraceAsString()
             ]);
         }  finally {
-            chdir($currentDir);
+            $this->notifier->sendUpdate("Mutation testing completed", 75);
         }
-
-        $this->notifier->sendUpdate("Mutation testing completed", 75);
 
         return $results;
     }
 
-    private function setupInfectionConfig(string $dir): string
+    private function setupInfectionConfig(): string
     {
-        $basepath = '/app/' . $dir;
+        $testCasesDir = $this->isFinal ? $this->getMutatedTestDirectory() : $this->testDir;
+        $outputDir = $this->isFinal ? 'mutated_result' : 'result';
+        $configFile = $this->isFinal ? 'mutated_infection.json5' : 'infection.json5';
+
+        $targetPath = $this->repoDir . '/' . $configFile;
         $template = [
-            "\$schema" => $basepath . "/vendor/infection/infection/resources/schema.json",
-            "bootstrap" => $basepath . "/vendor/autoload.php",
-            "phpUnit" => ["configDir" => $basepath],
+            "\$schema" => $this->repoDir . "/vendor/infection/infection/resources/schema.json",
+            "bootstrap" => $this->repoDir . "/vendor/autoload.php",
+            "phpUnit" => ["configDir" => $this->repoDir],
             "source" => [
                 "directories" => [
-                    $basepath . "/src", 
-                    $basepath ."/tests"
+                    $this->repoDir . "/src", 
+                    $testCasesDir,
                 ], 
                 "excludes" => ["vendor"]
             ],
             "logs" => [
-                "text" => "result/infection.log",
-                "html" => "result/infection.html",
-                "summary" => "result/summary.log",
-                "json" => "result/infection-report.json",
-                "summaryJson" => "result/summary.json"
+                "text" => "$outputDir/infection.log",
+                "html" => "$outputDir/infection.html",
+                "summary" => "$outputDir/summary.log",
+                "json" => "$outputDir/infection-report.json",
+                "summaryJson" => "$outputDir/summary.json"
             ],
             "mutators" => [
                 "@default" => true
@@ -95,38 +103,38 @@ class InfectionRunner
             "testFramework" => "phpunit",
         ];
 
-        if (file_put_contents($basepath . '/infection.json5', json_encode($template, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)) !== false) {
-            $this->logger->info("Infection configuration created", ['filePath' => $basepath . '/infection.json5']);
+        if (file_put_contents($targetPath, json_encode($template, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)) !== false) {
+            $this->logger->info("Infection configuration created", ['filePath' => $targetPath]);
         } else {
             throw new \RuntimeException("Failed to create Infection configuration file");
         }
 
-        return $basepath .'/infection.json5';
+        return $targetPath;
     }
 
-    private function setupPhpUnitConfig($dir): string
+    private function setupPhpUnitConfig(): string
     {
-        $basepath = '/app/' . $dir;
-        $bootstrapPath = $basepath . '/vendor/autoload.php';
-        $testdir = $basepath . '/tests';
+        $testCasesDir = $this->isFinal ? $this->getMutatedTestDirectory() : $this->testDir;
+        $bootstrapPath = $this->repoDir . '/vendor/autoload.php';
         $template = <<<XML
 <phpunit bootstrap="{$bootstrapPath}"
          executionOrder="random"
          resolveDependencies="true">
     <testsuites>
         <testsuite name="Path Traversal Tests">
-            <directory>{$testdir}</directory>
+            <directory>{$testCasesDir}</directory>
         </testsuite>
     </testsuites>
 </phpunit>
 XML;
-        if (file_put_contents($basepath . '/phpunit.xml', $template) !== false) {
-            $this->logger->info("PHPUnit configuration created", ['filePath' => $basepath . '/phpunit.xml']);
+
+        if (file_put_contents($this->repoDir . '/phpunit.xml', $template) !== false) {
+            $this->logger->info("PHPUnit configuration created", ['filePath' => $this->repoDir . '/phpunit.xml']);
         } else {
             throw new \RuntimeException("Failed to create PHPUnit configuration file");
         }
         
-        return $basepath . '/phpunit.xml';
+        return $this->repoDir . '/phpunit.xml';
     }
 
     private function parseResults(string $outputDir): array
@@ -171,5 +179,43 @@ XML;
         }
 
         return $results;
+    }
+
+    public function copyTestsToRepo($testCases): void {
+        // Export each test case
+        foreach ($testCases as $index => $test) {
+            $filename = $this->generateTestFileName($test, $index);
+            $filepath = $this->getMutatedTestDirectory() . '/' . $filename;
+
+            // Write test file
+            file_put_contents($filepath, FileHelper::formatTestCode($test));
+
+            $this->logger->info("Exported test case", [
+                'file' => $filename,
+                'type' => $test['type']
+            ]);
+        }
+    }
+
+    private function generateTestFileName(array $test, int $index): string
+    {
+        $prefix = $test['type'] === 'vulnerability' ? 'SecurityTest' : 'MutationTest';
+        return sprintf(
+            '%s_%03d_%s.php',
+            preg_replace('/[^a-zA-Z0-9]/', '_', $test['selectedModel']),
+            $index + 1,
+            $prefix,
+        );
+    }
+
+    public function setFinalRunner(bool $isFinal): void
+    {
+        $this->isFinal = $isFinal;
+        $this->logger->info("Setting final runner mode", ['isFinal' => $isFinal]);
+    }
+
+    public function getMutatedTestDirectory(): string
+    {
+        return $this->repoDir . '/mutated_tests';
     }
 } 

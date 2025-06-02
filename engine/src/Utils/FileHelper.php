@@ -73,6 +73,21 @@ class FileHelper
         return self::writeFile($filePath, $json, $logger);
     }
 
+    public static  function formatTestCode(array $test): string
+    {
+        $code = $test['testCode'];
+        $code = preg_replace('/^```php\s*\n?/i', '', $code);
+        if (strpos($code, "<?php") !== 0 && preg_match('/^```\s*\n?/', $code)) {
+            $code = preg_replace('/^```\s*\n?/i', '', $code);
+        }
+
+        if (substr($code, -3) === "```") {
+            $code = substr($code, 0, -3);
+        }
+
+        return trim($code);
+    }
+
     /**
      * Recursively deletes a directory.
      *

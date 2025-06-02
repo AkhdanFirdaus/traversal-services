@@ -51,31 +51,44 @@ class AppService
             $repoPath = $cloner->clone($repoUrl, $isApi);
 
             // Step 2: Heuristic Analysis
-            $analyzer = new HeuristicAnalyzer($this->logger, $this->notifier);
+            $analyzer = new HeuristicAnalyzer($this->logger, $this->notifier, $repoPath);
             $vulnerabilities = $analyzer->analyze($repoPath);
 
             // Step 3: Initial Infection Run
-            $infectionRunner = new InfectionRunner($this->logger, $this->notifier);
-            $initialMsi = $infectionRunner->run($repoPath);
+            $infectionRunner = new InfectionRunner(
+                $this->logger, 
+                $this->notifier, 
+                $analyzer->getProperRepoPath(), 
+                $analyzer->getDetectedTestDirectory(),
+            );
+            $initialMsi = $infectionRunner->run();
 
             // Step 4: Generate AI Test Cases
-            $generator = new AiTestGenerator($this->logger, $this->notifier, $repoPath);
+            $generator = new AiTestGenerator($this->logger, $this->notifier, $analyzer->getProperRepoPath());
             $testCases = $generator->generate($vulnerabilities, $initialMsi['escapedMutants']);
 
             // Step 5: Select and Export Tests
             $selector = new TestSelector($this->logger);
             $selectedTests = $selector->select($testCases);
-
-            $exporter = new Exporter($this->logger, $this->notifier);
-            $exportResult = $exporter->export($selectedTests, $repoPath, $isApi);
-
+            
             // Step 6: Final Infection Run
-            $finalMsi = $infectionRunner->run($repoPath);
+            $infectionRunner->copyTestsToRepo($selectedTests);
+            $infectionRunner->setFinalRunner(true);
+            $finalMsi = $infectionRunner->run();
+            
+            // Step 7: Export Tests
+            $exporter = new Exporter(
+                $this->logger, 
+                $this->notifier,
+                $analyzer->getProperRepoPath(), 
+                $analyzer->getDetectedTestDirectory(),
+            );
+            $exportResult = $exporter->export($selectedTests, $analyzer->getProperRepoPath(), $isApi);
 
-            // Step 7: Generate Reports
+            // Step 8: Generate Reports
             $reporter = new Reporter($this->logger, $this->notifier);
             $reports = $reporter->generateReports(
-                $repoPath,
+                $analyzer->getProperRepoPath(),
                 $vulnerabilities,
                 $initialMsi,
                 $finalMsi,
@@ -83,7 +96,7 @@ class AppService
                 $isApi
             );
 
-            // // Step 8: Cleanup
+            // // Step 9: Cleanup
             // $cleaner = new Cleaner($this->logger, $this->notifier);
             // $cleaner->cleanup($repoPath, $isApi);
 

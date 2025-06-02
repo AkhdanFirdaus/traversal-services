@@ -16,15 +16,18 @@ class HeuristicAnalyzer
     private Parser $parser;
     private NodeTraverser $traverser;
     private TraversalVisitor $visitor;
-
+    private string $detectedTestDirectory;
+    
     public function __construct(
         private Logger $logger,
-        private SocketNotifier $notifier
+        private SocketNotifier $notifier,
+        private string $repoPath,
     ) {
-        $this->parser = (new ParserFactory)->create(ParserFactory::PREFER_PHP7);
+        $this->parser = (new ParserFactory)->createForHostVersion();
         $this->traverser = new NodeTraverser();
         $this->visitor = new TraversalVisitor();
         $this->traverser->addVisitor($this->visitor);
+        $this->detectedTestDirectory = $repoPath . '/tests';
     }
 
     public function analyze(string $targetDir): array
@@ -99,5 +102,15 @@ class HeuristicAnalyzer
         $this->notifier->sendUpdate("Code analysis completed", 50);
 
         return $vulnerabilities;
+    }
+
+    public function getProperRepoPath(): string
+    {
+        return '/app/' . $this->repoPath;
+    }
+
+    public function getDetectedTestDirectory(): string
+    {
+        return '/app/' . $this->detectedTestDirectory;
     }
 } 

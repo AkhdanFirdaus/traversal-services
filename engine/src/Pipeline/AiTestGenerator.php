@@ -46,6 +46,11 @@ class AiTestGenerator
             $testCases[] = $generatedTest;
         }
 
+        FileHelper::saveJsonReport(
+            $this->repoPath . '/result/test_cases.json',
+            array_filter($testCases),
+        );
+
         $this->notifier->sendUpdate("Test generation completed", 90);
 
         return array_filter($testCases); // Remove any null results
@@ -119,23 +124,27 @@ class AiTestGenerator
     private function buildMutationPrompt(array $mutant): string
     {
         return <<<EOT
-Generate a PHPUnit test case to detect the following code mutation:
+Generate a complete PHPUnit test case to detect the following code mutation. The output must be a single, valid PHP file, starting directly with <?php and containing no markdown formatting or backticks.
 
+Mutation Details:
 File: {$mutant['file']}
 Line: {$mutant['line']}
 Mutator: {$mutant['mutator']}
 
-Original code:
+Original code snippet:
 {$mutant['originalSourceCode']}
 
-Mutated version:
+Mutated code snippet:
 {$mutant['mutatedSourceCode']}
 
-Requirements:
-1. The test should fail for the mutated version but pass for the original code
-2. Include edge cases
-3. Follow PHPUnit best practices
-4. Include proper assertions
+Test Case Requirements:
+1. Detection: The generated test method must fail when run against the "Mutated Code Snippet" and pass when run against the "Original Code Snippet".
+2. Focus: The test should specifically target the behavior difference introduced by the mutation.
+3. Edge Cases: Where applicable and relevant to the mutation, include test assertions that cover edge cases to ensure robustness.
+4. Best Practices: Adhere to PHPUnit best practices, including clear test method naming (e.g., testOriginalBehaviorIsPreservedAndMutatedBehaviorFails), proper use of assertions, and good isolation of the unit under test. If the code involves classes or methods, ensure they are appropriately mocked or instantiated.
+5. Assertions: Use appropriate PHPUnit assertions (e.g., assertEquals, assertTrue, assertFalse, assertNull, expectException, etc.) to verify the expected outcomes.
+6. PHP Only: All output, including any comments, explanations, or setup, must be in the form of valid PHP code (e.g., using // or /* */ for comments). Do not include any narrative or explanatory text outside of PHP comments.
+7. Completeness: Provide all necessary use statements, class definitions, and method structures for a runnable PHPUnit test file. Assume the original and mutated code snippets will be part of a class or function that the test will interact with. If the context of the snippet (e.g., class name, method name) isn't obvious, make a reasonable assumption and state it in a PHP comment (e.g., // Assuming the code is part of a class named 'MyClass' and method 'myMethod').
 EOT;
     }
 
@@ -229,8 +238,8 @@ EOT;
             'messages' => [['role' => 'user', 'content' => $prompt]],
             'temperature' => $config['temperature'],
             'max_tokens' => 2048,
-            
         ];
+
         $response = $this->client->post($config['api_url'], [
             'headers' => [
                 'x-api-key' => $config['api_key'],
