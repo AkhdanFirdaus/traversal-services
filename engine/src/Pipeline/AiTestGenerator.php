@@ -32,19 +32,23 @@ class AiTestGenerator
 
         $testCases = [];
 
-        // // Generate tests for vulnerabilities
-        // foreach ($vulnerabilities as $file => $fileVulnerabilities) {
-        //     foreach ($fileVulnerabilities as $vulnerability) {
-        //         $testCases[] = $this->generateTestCase($file, $vulnerability);
-        //     }
-        // }
-
         // Generate tests for escaped mutants
         foreach ($escapedMutants as $key => $mutant) {
             $this->logger->info("Generating test case for mutant-" . $key, $mutant);
-            $generatedTest = $this->generateMutationTestCase($mutant);
-            $testCases[] = $generatedTest;
+            $generatedTests = $this->generateMutationTestCase($mutant);
+
+            // $generatedTests return an array, append all to $testCases
+            $testCases = array_merge($testCases, $generatedTests);
         }
+
+        // for ($i=0; $i < 2; $i++) {
+        //     $mutant = $escapedMutants[$i];
+        //     $this->logger->info("Generating test case for mutant-" . $i, $mutant);
+        //     $generatedTests = $this->generateMutationTestCase($mutant);
+
+        //     // $generatedTests return an array, append all to $testCases
+        //     $testCases = array_merge($testCases, $generatedTests);
+        // }
 
         FileHelper::saveJsonReport(
             $this->repoPath . '/result/test_cases.json',
@@ -56,70 +60,33 @@ class AiTestGenerator
         return array_filter($testCases); // Remove any null results
     }
 
-    // private function generateTestCase(string $file, array $vulnerability): ?array
-    // {
-    //     try {
-    //         $prompt = $this->buildVulnerabilityPrompt($file, $vulnerability);
-    //         $responses = $this->getResponsesFromLLMs($prompt);
-
-    //         return [
-    //             'type' => 'vulnerability',
-    //             'file' => $file,
-    //             'vulnerability' => $vulnerability,
-    //             'testCases' => $responses
-    //         ];
-
-    //     } catch (\Exception $e) {
-    //         $this->logger->error("Failed to generate test case", [
-    //             'file' => $file,
-    //             'error' => $e->getMessage()
-    //         ]);
-    //         return null;
-    //     }
-    // }
-
-    private function generateMutationTestCase(array $mutant): ?array
+    private function generateMutationTestCase(array $mutant): array
     {
         try {
             $prompt = $this->buildMutationPrompt($mutant);
             $responses = $this->getResponsesFromLLMs($prompt);
 
-            return [
-                'type' => 'mutation',
-                'mutant' => $mutant,
-                'testCases' => $responses
-            ];
+            // Responses returns multiple LLM outputs, we need to filter out any null or empty responses
+            $responses = array_filter($responses, function ($response) {
+                return !empty($response);
+            });
 
+            // Make it an array with the key as attribute "model", use foreach
+            return array_map(function ($response, $model) use ($mutant) {
+                return array_merge($mutant, [
+                    'type' => 'mutation',
+                    'model' => $model,
+                    'generatedSourceCode' => $response
+                ]);
+            }, $responses, array_keys($responses));
         } catch (\Exception $e) {
             $this->logger->error("Failed to generate mutation test case", [
                 'mutant' => $mutant,
                 'error' => $e->getMessage()
             ]);
-            return null;
+            return [];
         }
     }
-
-//     private function buildVulnerabilityPrompt(string $file, array $vulnerability): string
-//     {
-//         return <<<EOT
-// Generate a PHPUnit test case for the following potential security vulnerability:
-
-// File: {$file}
-// Line: {$vulnerability['line']}
-// Rule ID: {$vulnerability['ruleId']}
-// Description: {$vulnerability['description']}
-
-// Relevant code:
-// {$vulnerability['sourceCode']}
-
-// Requirements:
-// 1. The test should verify that the code is vulnerable to path traversal
-// 2. Include both positive and negative test cases
-// 3. Use realistic input data
-// 4. Follow PHPUnit best practices
-// 5. Include proper assertions
-// EOT;
-//     }
 
     private function buildMutationPrompt(array $mutant): string
     {
@@ -127,9 +94,9 @@ class AiTestGenerator
 Generate a complete PHPUnit test case to detect the following code mutation. The output must be a single, valid PHP file, starting directly with <?php and containing no markdown formatting or backticks.
 
 Mutation Details:
-File: {$mutant['file']}
-Line: {$mutant['line']}
-Mutator: {$mutant['mutator']}
+File: {$mutant['originalFilePath']}
+Line: {$mutant['originalStartLine']}
+Mutator: {$mutant['mutatorName']}
 
 Original code snippet:
 {$mutant['originalSourceCode']}

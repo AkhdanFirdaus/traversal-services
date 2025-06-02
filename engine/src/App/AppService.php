@@ -67,12 +67,12 @@ class AppService
             $generator = new AiTestGenerator($this->logger, $this->notifier, $analyzer->getProperRepoPath());
             $testCases = $generator->generate($vulnerabilities, $initialMsi['escapedMutants']);
 
-            // Step 5: Select and Export Tests
-            $selector = new TestSelector($this->logger);
-            $selectedTests = $selector->select($testCases);
+            // // Step 5: Select and Export Tests
+            // $selector = new TestSelector($this->logger);
+            // $selectedTests = $selector->select($testCases);
             
             // Step 6: Final Infection Run
-            $infectionRunner->copyTestsToRepo($selectedTests);
+            $infectionRunner->copyTestsToRepo($testCases);
             $infectionRunner->setFinalRunner(true);
             $finalMsi = $infectionRunner->run();
             
@@ -83,7 +83,7 @@ class AppService
                 $analyzer->getProperRepoPath(), 
                 $analyzer->getDetectedTestDirectory(),
             );
-            $exportResult = $exporter->export($selectedTests, $analyzer->getProperRepoPath(), $isApi);
+            $exportResult = $exporter->export($testCases, $analyzer->getProperRepoPath(), $isApi);
 
             // Step 8: Generate Reports
             $reporter = new Reporter($this->logger, $this->notifier);

@@ -73,10 +73,22 @@ class FileHelper
         return self::writeFile($filePath, $json, $logger);
     }
 
-    public static  function formatTestCode(array $test): string
+    public static function saveTestCode(string $filename, string $filepath, string $code): string
     {
-        $code = $test['testCode'];
+        $mutatedFileName = '';
+
+        if (str_contains($filename, 'Test.php')) {
+            $testNameParts = explode('Test.php', $filename);
+            $mutatedFileName = $testNameParts[0] . 'MutatedTest.php';
+            $filepath = $filepath . '/' . $mutatedFileName;
+
+            $classname = str_replace('.php', '', $mutatedFileName);
+
+            $code = str_replace($classname, $mutatedFileName, $filename);
+        }
+
         $code = preg_replace('/^```php\s*\n?/i', '', $code);
+        
         if (strpos($code, "<?php") !== 0 && preg_match('/^```\s*\n?/', $code)) {
             $code = preg_replace('/^```\s*\n?/i', '', $code);
         }
@@ -85,7 +97,13 @@ class FileHelper
             $code = substr($code, 0, -3);
         }
 
-        return trim($code);
+        $code = trim($code);
+
+        if (file_put_contents($filepath, $code) === false) {
+            throw new \RuntimeException("Failed to write test code to file: $filepath");
+        }
+
+        return $mutatedFileName;
     }
 
     /**

@@ -15,12 +15,7 @@ class InfectionRunner
         private string $repoDir,
         private string $testDir,
         private bool $isFinal = false,
-    ) {
-        // make sure the directory exists
-        if (!is_dir($repoDir . '/mutated_tests')) {
-            mkdir($repoDir . '/mutated_tests', 0777, true);
-        }
-    }
+    ) {}
 
     public function run(): array
     {
@@ -74,10 +69,9 @@ class InfectionRunner
 
     private function setupInfectionConfig(): string
     {
-        $testCasesDir = $this->isFinal ? $this->getMutatedTestDirectory() : $this->testDir;
         $outputDir = $this->isFinal ? 'mutated_result' : 'result';
         $configFile = $this->isFinal ? 'mutated_infection.json5' : 'infection.json5';
-
+        $excludeDirs = $this->isFinal ? ['vendor', "/^(?!.*Mutate).*\\.php$/"] : ['vendor'];
         $targetPath = $this->repoDir . '/' . $configFile;
         $template = [
             "\$schema" => $this->repoDir . "/vendor/infection/infection/resources/schema.json",
@@ -86,9 +80,9 @@ class InfectionRunner
             "source" => [
                 "directories" => [
                     $this->repoDir . "/src", 
-                    $testCasesDir,
+                    $this->testDir
                 ], 
-                "excludes" => ["vendor"]
+                "excludes" => $excludeDirs
             ],
             "logs" => [
                 "text" => "$outputDir/infection.log",
@@ -114,7 +108,6 @@ class InfectionRunner
 
     private function setupPhpUnitConfig(): string
     {
-        $testCasesDir = $this->isFinal ? $this->getMutatedTestDirectory() : $this->testDir;
         $bootstrapPath = $this->repoDir . '/vendor/autoload.php';
         $template = <<<XML
 <phpunit bootstrap="{$bootstrapPath}"
@@ -122,7 +115,7 @@ class InfectionRunner
          resolveDependencies="true">
     <testsuites>
         <testsuite name="Path Traversal Tests">
-            <directory>{$testCasesDir}</directory>
+            <directory>{$this->testDir}</directory>
         </testsuite>
     </testsuites>
 </phpunit>
@@ -162,15 +155,8 @@ XML;
                 
                 // Extract escaped mutants details
                 if (isset($report['escaped'])) {
-                    foreach ($report['escaped'] as $mutantParent) {
-                        $mutant = $mutantParent['mutator'];
-                        array_push($results['escapedMutants'], [
-                            'file' => $mutant['originalFilePath'],
-                            'line' => $mutant['originalStartLine'],
-                            'mutator' => $mutant['mutatorName'],
-                            'originalSourceCode' => $mutant['originalSourceCode'],
-                            'mutatedSourceCode' => $mutant['mutatedSourceCode'],
-                        ]);
+                    foreach ($report['escaped'] as $mutant) {
+                        array_push($results['escapedMutants'], $mutant['mutator']);
                     }
                 }
 
@@ -184,28 +170,15 @@ XML;
     public function copyTestsToRepo($testCases): void {
         // Export each test case
         foreach ($testCases as $index => $test) {
-            $filename = $this->generateTestFileName($test, $index);
-            $filepath = $this->getMutatedTestDirectory() . '/' . $filename;
+            $ori = basename($test['originalFilePath']);
 
-            // Write test file
-            file_put_contents($filepath, FileHelper::formatTestCode($test));
+            $filename = FileHelper::saveTestCode($ori, $this->testDir, $test['generatedSourceCode']);
 
             $this->logger->info("Exported test case", [
                 'file' => $filename,
                 'type' => $test['type']
             ]);
         }
-    }
-
-    private function generateTestFileName(array $test, int $index): string
-    {
-        $prefix = $test['type'] === 'vulnerability' ? 'SecurityTest' : 'MutationTest';
-        return sprintf(
-            '%s_%03d_%s.php',
-            preg_replace('/[^a-zA-Z0-9]/', '_', $test['selectedModel']),
-            $index + 1,
-            $prefix,
-        );
     }
 
     public function setFinalRunner(bool $isFinal): void

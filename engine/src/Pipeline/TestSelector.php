@@ -12,31 +12,6 @@ class TestSelector
 
     public function select(array $testCasesCollection): array
     {
-        // $this->logger->info("Starting test case selection", [
-        //     'totalCollections' => count($testCasesCollection)
-        // ]);
-
-        // $selectedTests = [];
-
-        // foreach ($testCasesCollection as $individualTestCaseData) {
-        //     if (empty($individualTestCaseData) || empty($individualTestCaseData['testCases'])) {
-        //         continue;
-        //     }
-
-        //     $bestScoredTest = $this->findBestTestFromResponses($individualTestCaseData);
-            
-
-        //     if ($bestScoredTest) {
-        //         $selectedTests[] = $bestScoredTest;
-        //     }
-        // }
-
-        // $this->logger->info("Test case selection completed", [
-        //     'selectedTestsCount' => count($selectedTests)
-        // ]);
-
-        // return $selectedTests;
-
         // For manual cross-check mode, we will return all test cases with their AI responses
         $this->logger->info("Starting test case selection (manual cross-check mode)", [
             'totalCollections' => count($testCasesCollection)

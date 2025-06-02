@@ -35,11 +35,10 @@ class Exporter
 
         // Export each test case
         foreach ($selectedTests as $index => $test) {
-            $filename = $this->generateTestFileName($test, $index);
-            $filepath = $exportDir . '/' . $filename;
-
+            $ori = basename($test['originalFilePath']);
+            
             // Write test file
-            file_put_contents($filepath, FileHelper::formatTestCode($test));
+            $filename = FileHelper::saveTestCode($ori, $this->testDir, $test);
 
             $this->logger->info("Exported test case", [
                 'file' => $filename,
@@ -56,17 +55,6 @@ class Exporter
             'exportDir' => $exportDir,
             'zipPath' => $zipPath
         ];
-    }
-
-    private function generateTestFileName(array $test, int $index): string
-    {
-        $prefix = $test['type'] === 'vulnerability' ? 'SecurityTest' : 'MutationTest';
-        return sprintf(
-            '%s_%03d_%s.php',
-            $prefix,
-            $index + 1,
-            preg_replace('/[^a-zA-Z0-9]/', '_', $test['selectedModel']),
-        );
     }
 
     private function createZipArchive(string $exportDir, string $repoPath, array $selectedTests): string
@@ -181,16 +169,16 @@ MD;
             $source = $test['source'];
             if ($test['type'] === 'vulnerability') {
                 $output .= sprintf("- %s (Rule: %s)\n  %s\n",
-                    $test['selectedModel'],
+                    $test['model'],
                     $source['ruleId'] ?? 'N/A',
                     $source['description'] ?? 'No description'
                 );
             } else {
                 $output .= sprintf("- %s (Mutator: %s)\n  Line %d in %s\n",
-                    $test['selectedModel'],
-                    $source['mutator'] ?? 'N/A',
-                    $source['line'] ?? 0,
-                    basename($source['file'] ?? 'unknown')
+                    $test['model'],
+                    $source['mutatorName'] ?? 'N/A',
+                    $source['originalStartLine'] ?? 0,
+                    basename($source['originalFilePath'] ?? 'unknown')
                 );
             }
         }
