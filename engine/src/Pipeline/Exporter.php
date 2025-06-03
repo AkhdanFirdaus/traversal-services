@@ -16,14 +16,10 @@ class Exporter
         private string $exportDir,
     ) {}
 
-    public function export(array $selectedTests, string $repoPath, bool $isApi = false): array
+    public function export(string $repoPath, string $testDir, bool $isApi = false): array
     {
-        $this->logger->info("Starting test export", [
-            'totalTests' => count($selectedTests)
-        ]);
         $this->notifier->sendUpdate("Exporting generated tests", 90);
 
-        // Determine export directory
         $baseDir = $isApi ? $_ENV['REPORT_DIR'] . '/exported_test_cases_api' : $_ENV['REPORT_DIR'] . '/exported_test_cases_cli';
         $exportDir = $baseDir . '/' . basename($repoPath) . '_' . date('Y-m-d_H-i-s');
 
@@ -33,27 +29,30 @@ class Exporter
         }
         mkdir($exportDir, 0777, true);
 
-        // Export each test case
-        foreach ($selectedTests as $index => $test) {
-            $ori = basename($test['originalFilePath']);
-            
-            // Write test file
-            $filename = FileHelper::saveTestCode($ori, $this->testDir, $test);
-
-            $this->logger->info("Exported test case", [
-                'file' => $filename,
-                'type' => $test['type']
-            ]);
+        // Grab all the files contained in $testDir
+        $testFiles = glob($testDir . '/*.php');
+        if (empty($testFiles)) {
+            throw new \RuntimeException("No test files found in $testDir");
+        }
+        
+        // loop and copy each test file to the export directory
+        foreach ($testFiles as $index => $test) {
+            // Copy file
+            @copy($test, $exportDir . '/' . basename($test));
         }
 
-        // Create downloadable ZIP archive
-        $zipPath = $this->createZipArchive($exportDir, $repoPath, $selectedTests);
+        // Create downloadable ZIP archive from the export directory
+        // $this->logger->info("Exporting test cases", [
+        //     'exportDir' => $exportDir,
+        //     'testFiles' => count($testFiles)
+        // ]);
+        // $zipPath = $this->createZipArchive($exportDir, $repoPath, $selectedTests);
 
         $this->notifier->sendUpdate("Test export completed", 95);
 
         return [
             'exportDir' => $exportDir,
-            'zipPath' => $zipPath
+            'zipPath' => ''
         ];
     }
 

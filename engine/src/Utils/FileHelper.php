@@ -73,19 +73,34 @@ class FileHelper
         return self::writeFile($filePath, $json, $logger);
     }
 
-    public static function saveTestCode(string $filename, string $filepath, string $code): string
+    public static function saveTestCode(string $filename, string $targetDir, string $code): string
     {
-        $mutatedFileName = '';
+        $classname = null;
+        $filename = null;
 
-        if (str_contains($filename, 'Test.php')) {
-            $testNameParts = explode('Test.php', $filename);
-            $mutatedFileName = $testNameParts[0] . 'MutatedTest.php';
-            $filepath = $filepath . '/' . $mutatedFileName;
-
-            $classname = str_replace('.php', '', $mutatedFileName);
-
-            $code = str_replace($classname, $mutatedFileName, $filename);
+        if (preg_match('/class\s+([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)\s+extends/', $code, $matches)) {
+            $classname = $matches[1];
         }
+
+        // A slightly simpler regex common for typical PHP class names (ASCII only):
+        if ($classname === null && preg_match('/class\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+extends/', $code, $matches)) {
+            $classname = $matches[1];
+        }
+
+        // Check if the string ends with "Test"
+        if (str_ends_with($classname, "Test")) {
+            // Get the part of the string before the final "Test"
+            // For "BasicFunctionalityTestVisibilityTest", $basePart will be "BasicFunctionalityTestVisibility"
+            // For "UserProfileReadTest", $basePart will be "UserProfileRead"
+            $basePart = substr($classname, 0, -strlen("Test"));
+
+            // Construct the new filename
+            $filename = $basePart . "MutatedTest";
+        }
+
+        $targetDir = $targetDir . '/' . $filename . '.php';
+        
+        $code = preg_replace('/class\s+(\w+)/', 'class ' . $filename, $code);
 
         $code = preg_replace('/^```php\s*\n?/i', '', $code);
         
@@ -99,11 +114,11 @@ class FileHelper
 
         $code = trim($code);
 
-        if (file_put_contents($filepath, $code) === false) {
-            throw new \RuntimeException("Failed to write test code to file: $filepath");
+        if (file_put_contents($targetDir, $code) === false) {
+            throw new \RuntimeException("Failed to write test code to file: $targetDir");
         }
 
-        return $mutatedFileName;
+        return $filename;
     }
 
     /**

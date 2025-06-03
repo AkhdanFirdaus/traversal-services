@@ -33,15 +33,15 @@ class AiTestGenerator
         $testCases = [];
 
         // Generate tests for escaped mutants
-        foreach ($escapedMutants as $key => $mutant) {
-            $this->logger->info("Generating test case for mutant-" . $key, $mutant);
-            $generatedTests = $this->generateMutationTestCase($mutant);
+        // foreach ($escapedMutants as $key => $mutant) {
+        //     $this->logger->info("Generating test case for mutant-" . $key, $mutant);
+        //     $generatedTests = $this->generateMutationTestCase($mutant);
 
-            // $generatedTests return an array, append all to $testCases
-            $testCases = array_merge($testCases, $generatedTests);
-        }
+        //     // $generatedTests return an array, append all to $testCases
+        //     $testCases = array_merge($testCases, $generatedTests);
+        // }
 
-        // for ($i=0; $i < 2; $i++) {
+        // for ($i=0; $i < 1; $i++) {
         //     $mutant = $escapedMutants[$i];
         //     $this->logger->info("Generating test case for mutant-" . $i, $mutant);
         //     $generatedTests = $this->generateMutationTestCase($mutant);
@@ -49,6 +49,12 @@ class AiTestGenerator
         //     // $generatedTests return an array, append all to $testCases
         //     $testCases = array_merge($testCases, $generatedTests);
         // }
+        $mutant = $escapedMutants[1];
+        $this->logger->info("Generating test case for mutant-" . 0, $mutant);
+        $generatedTests = $this->generateMutationTestCase($mutant);
+
+        // $generatedTests return an array, append all to $testCases
+        $testCases = array_merge($testCases, $generatedTests);
 
         FileHelper::saveJsonReport(
             $this->repoPath . '/result/test_cases.json',

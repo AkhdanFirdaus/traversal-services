@@ -108,6 +108,7 @@ class InfectionRunner
 
     private function setupPhpUnitConfig(): string
     {
+        $suffix = $this->isFinal ? 'MutatedTest.php' : 'Test.php';
         $bootstrapPath = $this->repoDir . '/vendor/autoload.php';
         $template = <<<XML
 <phpunit bootstrap="{$bootstrapPath}"
@@ -115,7 +116,7 @@ class InfectionRunner
          resolveDependencies="true">
     <testsuites>
         <testsuite name="Path Traversal Tests">
-            <directory>{$this->testDir}</directory>
+            <directory suffix="{$suffix}">{$this->testDir}</directory>
         </testsuite>
     </testsuites>
 </phpunit>
@@ -169,10 +170,9 @@ XML;
 
     public function copyTestsToRepo($testCases): void {
         // Export each test case
+        $this->logger->info("Copying test cases to repository", ['testCount' => count($testCases)]);
         foreach ($testCases as $index => $test) {
-            $ori = basename($test['originalFilePath']);
-
-            $filename = FileHelper::saveTestCode($ori, $this->testDir, $test['generatedSourceCode']);
+            $filename = FileHelper::saveTestCode($test['originalFilePath'], $this->testDir, $test['generatedSourceCode']);
 
             $this->logger->info("Exported test case", [
                 'file' => $filename,
@@ -185,10 +185,5 @@ XML;
     {
         $this->isFinal = $isFinal;
         $this->logger->info("Setting final runner mode", ['isFinal' => $isFinal]);
-    }
-
-    public function getMutatedTestDirectory(): string
-    {
-        return $this->repoDir . '/mutated_tests';
     }
 } 

@@ -83,7 +83,12 @@ class AppService
                 $analyzer->getProperRepoPath(), 
                 $analyzer->getDetectedTestDirectory(),
             );
-            $exportResult = $exporter->export($testCases, $analyzer->getProperRepoPath(), $isApi);
+            
+            $exportResult = $exporter->export(
+                $analyzer->getProperRepoPath(), 
+                $analyzer->getDetectedTestDirectory(), 
+                $isApi,
+            );
 
             // Step 8: Generate Reports
             $reporter = new Reporter($this->logger, $this->notifier);
@@ -93,7 +98,7 @@ class AppService
                 $initialMsi,
                 $finalMsi,
                 $exportResult['exportDir'],
-                $isApi
+                $isApi,
             );
 
             // // Step 9: Cleanup
