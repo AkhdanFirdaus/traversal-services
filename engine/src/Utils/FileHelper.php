@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Utils;
+namespace Utils;
 
 class FileHelper
 {
@@ -13,16 +13,16 @@ class FileHelper
      * @param Logger|null $logger Optional logger instance.
      * @return string|null File content or null on failure.
      */
-    public static function readFile(string $filePath, ?Logger $logger = null): ?string
+    public static function readFile(string $filePath, ?Logger $logger = null): string
     {
         if (!is_readable($filePath) || !is_file($filePath)) {
             $logger?->warning("File not found or not readable: {filePath}", ['filePath' => $filePath]);
-            return null;
+            throw new \RuntimeException("Failed to create Infection configuration file");
         }
         $content = file_get_contents($filePath);
         if ($content === false) {
             $logger?->error("Could not read file content: {filePath}", ['filePath' => $filePath]);
-            return null;
+            throw new \RuntimeException("Failed to create Infection configuration file");
         }
         return $content;
     }
@@ -38,17 +38,16 @@ class FileHelper
     public static function writeFile(string $filePath, string $data, ?Logger $logger = null): bool
     {
         $dir = dirname($filePath);
-        if (!is_dir($dir)) {
-            if (!mkdir($dir, 0775, true) && !is_dir($dir)) { // Check is_dir again in case of race condition
-                $logger?->error("Failed to create directory: {directoryPath}", ['directoryPath' => $dir]);
-                return false;
-            }
+        if (!mkdir($dir, 0775, true) && !is_dir($dir)) { // Check is_dir again in case of race condition
+            $logger?->error("Failed to create directory: {directoryPath}", ['directoryPath' => $dir]);
+            throw new \RuntimeException("Failed to create Infection configuration file");
         }
 
         if (file_put_contents($filePath, $data) === false) {
             $logger?->error("Failed to write to file: {filePath}", ['filePath' => $filePath]);
-            return false;
+            throw new \RuntimeException("Failed to create Infection configuration file");
         }
+        
         $logger?->debug("Successfully wrote to file: {filePath}", ['filePath' => $filePath]);
         return true;
     }
@@ -72,6 +71,54 @@ class FileHelper
             return false;
         }
         return self::writeFile($filePath, $json, $logger);
+    }
+
+    public static function saveTestCode(string $filename, string $targetDir, string $code): string
+    {
+        $classname = null;
+        $filename = null;
+
+        if (preg_match('/class\s+([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)\s+extends/', $code, $matches)) {
+            $classname = $matches[1];
+        }
+
+        // A slightly simpler regex common for typical PHP class names (ASCII only):
+        if ($classname === null && preg_match('/class\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+extends/', $code, $matches)) {
+            $classname = $matches[1];
+        }
+
+        // Check if the string ends with "Test"
+        if (str_ends_with($classname, "Test")) {
+            // Get the part of the string before the final "Test"
+            // For "BasicFunctionalityTestVisibilityTest", $basePart will be "BasicFunctionalityTestVisibility"
+            // For "UserProfileReadTest", $basePart will be "UserProfileRead"
+            $basePart = substr($classname, 0, -strlen("Test"));
+
+            // Construct the new filename
+            $filename = $basePart . "MutatedTest";
+        }
+
+        $targetDir = $targetDir . '/' . $filename . '.php';
+        
+        $code = preg_replace('/class\s+(\w+)/', 'class ' . $filename, $code);
+
+        $code = preg_replace('/^```php\s*\n?/i', '', $code);
+        
+        if (strpos($code, "<?php") !== 0 && preg_match('/^```\s*\n?/', $code)) {
+            $code = preg_replace('/^```\s*\n?/i', '', $code);
+        }
+
+        if (substr($code, -3) === "```") {
+            $code = substr($code, 0, -3);
+        }
+
+        $code = trim($code);
+
+        if (file_put_contents($targetDir, $code) === false) {
+            throw new \RuntimeException("Failed to write test code to file: $targetDir");
+        }
+
+        return $filename;
     }
 
     /**

@@ -1,0 +1,9 @@
+<phpunit bootstrap="vendor/autoload.php"
+         executionOrder="random"
+         resolveDependencies="true">
+    <testsuites>
+        <testsuite name="Path Traversal Tests">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

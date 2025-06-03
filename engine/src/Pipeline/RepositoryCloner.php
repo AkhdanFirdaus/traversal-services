@@ -1,108 +1,106 @@
 <?php
 
-declare(strict_types=1);
+namespace Pipeline;
 
-namespace App\Pipeline;
-
-use App\Utils\Logger;
-use App\Utils\FileHelper;
 use Symfony\Component\Process\Process;
-use Symfony\Component\Process\Exception\ProcessFailedException;
+use Utils\Logger;
+use Utils\SocketNotifier;
 
 class RepositoryCloner
 {
-    private ?Logger $logger;
-    private string $baseCloneDir; // Base directory where repos will be cloned into subdirs
+    public function __construct(
+        private Logger $logger,
+        private SocketNotifier $notifier
+    ) {}
 
-    public function __construct(?Logger $logger = null, string $baseCloneDir = 'tmp/clones')
+    public function clone(string $repoUrl, bool $isApi = false): string
     {
-        $this->logger = $logger;
-        $this->baseCloneDir = rtrim($baseCloneDir, DIRECTORY_SEPARATOR);
+        $this->logger->info("Starting repository clone", ['url' => $repoUrl]);
+        $this->notifier->sendUpdate("Cloning repository", 5);
+
+        // Determine target directory
+        $baseDir = $isApi ? $_ENV['TMP_DIR_API'] : $_ENV['TMP_DIR_CLI'];
+        $repoName = $this->extractRepoName($repoUrl);
+        $targetDir = $baseDir . '/' . $repoName . '_' . uniqid();
+
+        // Ensure target directory exists
+        if (!is_dir($baseDir)) {
+            mkdir($baseDir, 0777, true);
+        }
+
+        // Clone the repository
+        $command = sprintf('git clone %s %s', escapeshellarg($repoUrl), escapeshellarg($targetDir));
+        exec($command, $output, $returnCode);
+
+        if ($returnCode !== 0) {
+            $error = implode("\n", $output);
+            $this->logger->error("Failed to clone repository", [
+                'url' => $repoUrl,
+                'error' => $error
+            ]);
+            throw new \RuntimeException("Failed to clone repository: " . $error);
+        }
+
+        $this->notifier->sendUpdate("Repository cloned successfully", 10);
+
+        // Install dependencies
+        $this->installDependencies($targetDir);
+
+        return $targetDir;
     }
 
-    /**
-     * Clones a Git repository to a unique temporary directory.
-     *
-     * @param string $repositoryUrl The URL of the Git repository.
-     * @param string|null $branch Optional branch name to clone.
-     * @param int $depth Optional clone depth (for shallow clones).
-     * @return string|null The path to the cloned repository on success, null on failure.
-     */
-    public function clone(string $repositoryUrl, ?string $branch = null, ?int $depth = null): ?string
+    private function extractRepoName(string $url): string
     {
-        // Sanitize repo URL slightly to create a somewhat safe directory name part
-        $repoNamePart = preg_replace('/[^a-zA-Z0-9_-]/', '_', basename($repositoryUrl, '.git'));
-        $uniqueDirName = $repoNamePart . '_' . uniqid();
-        $clonePath = $this->baseCloneDir . DIRECTORY_SEPARATOR . $uniqueDirName;
-
-        if (!FileHelper::deleteDirectoryRecursive($clonePath, $this->logger)) { // Clean up if exists
-             $this->logger?->warning("Could not clean up existing directory before cloning: {clonePath}", ['clonePath' => $clonePath]);
-             // Continue, git clone might handle it or fail
-        }
-
-        if (!is_dir(dirname($clonePath))) {
-            if (!mkdir(dirname($clonePath), 0775, true) && !is_dir(dirname($clonePath))) {
-                $this->logger?->error("Failed to create base clone directory: {baseCloneDir}", ['baseCloneDir' => dirname($clonePath)]);
-                return null;
-            }
-        }
+        // Remove .git extension if present
+        $url = preg_replace('/\.git$/', '', $url);
         
-        $this->logger?->info("Attempting to clone {repositoryUrl} into {clonePath}", [
-            'repositoryUrl' => $repositoryUrl,
-            'clonePath' => $clonePath
-        ]);
+        // Extract the last part of the path
+        $parts = explode('/', rtrim($url, '/'));
+        return end($parts);
+    }
 
-        $command = ['git', 'clone'];
-        if ($branch) {
-            $command[] = '--branch';
-            $command[] = $branch;
-        }
-        if ($depth) {
-            $command[] = '--depth';
-            $command[] = (string)$depth;
-        }
-        $command[] = $repositoryUrl;
-        $command[] = $clonePath; // Target directory for clone
+    private function installDependencies(string $targetDir): void
+    {
+        $this->logger->info("Installing dependencies", ['dir' => $targetDir]);
+        $this->notifier->sendUpdate("Installing dependencies", 15);
 
-        $process = new Process($command);
-        $process->setTimeout(300); // 5 minutes timeout for cloning
+        // Change to target directory
+        $currentDir = getcwd();
+        chdir($targetDir);
 
         try {
-            $process->mustRun();
-            $this->logger?->info("Successfully cloned repository: {repositoryUrl} to {clonePath}", [
-                'repositoryUrl' => $repositoryUrl,
-                'clonePath' => $clonePath
-            ]);
-            return $clonePath;
-        } catch (ProcessFailedException $exception) {
-            $this->logger?->error("Failed to clone repository: {repositoryUrl}. Error: {errorMessage}", [
-                'repositoryUrl' => $repositoryUrl,
-                'errorMessage' => $exception->getMessage(),
-                'stderr' => $process->getErrorOutput(),
-                'stdout' => $process->getOutput(),
-            ]);
-            // Attempt to clean up failed clone directory
-            FileHelper::deleteDirectoryRecursive($clonePath, $this->logger);
-            return null;
-        } catch (\Throwable $e) {
-            $this->logger?->error("An unexpected error occurred during cloning of {repositoryUrl}: {errorMessage}", [
-                'repositoryUrl' => $repositoryUrl,
-                'errorMessage' => $e->getMessage()
-            ]);
-            FileHelper::deleteDirectoryRecursive($clonePath, $this->logger);
-            return null;
+            // Install production dependencies
+            $command = ['composer', 'install', '--no-dev', '--no-interaction', '--optimize-autoloader'];
+
+            $process = new Process($command);
+            $process->setTimeout(3600);
+            $process->run();
+
+            if (!$process->isSuccessful()) {
+                $this->logger->warning("Failed to install production dependencies", [
+                    'output' => $process->getErrorOutput()
+                ]);
+            }
+
+            // Install PHPUnit if not present
+            if (!file_exists('vendor/bin/phpunit')) {
+                $command = ['composer', 'require', '--dev', 'phpunit/phpunit', '--no-interaction'];
+                $process = new Process($command);
+                $process->setTimeout(3600);
+                $process->run();
+
+                if (!$process->isSuccessful()) {
+                    $this->logger->warning("Failed to install PHPUnit", [
+                        'output' => $process->getErrorOutput()
+                    ]);
+                }
+            }
+
+            $this->notifier->sendUpdate("Dependencies installed", 20);
+
+        } finally {
+            // Restore original directory
+            chdir($currentDir);
         }
     }
-
-    /**
-     * Cleans up (deletes) a cloned repository directory.
-     *
-     * @param string $clonePath The path to the cloned repository.
-     * @return bool True on success, false on failure.
-     */
-    public function cleanup(string $clonePath): bool
-    {
-        $this->logger?->info("Cleaning up cloned repository at: {clonePath}", ['clonePath' => $clonePath]);
-        return FileHelper::deleteDirectoryRecursive($clonePath, $this->logger);
-    }
-}
+} 
