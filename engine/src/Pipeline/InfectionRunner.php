@@ -115,7 +115,7 @@ class InfectionRunner
          executionOrder="random"
          resolveDependencies="true">
     <testsuites>
-        <testsuite name="Path Traversal Tests">
+        <testsuite name="Path Traversal Mutated Tests">
             <directory suffix="{$suffix}">{$this->testDir}</directory>
         </testsuite>
     </testsuites>
