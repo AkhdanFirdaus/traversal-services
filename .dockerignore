@@ -1,5 +1,7 @@
-vendor
 tmp
-reports
+outputs
+vendor
+logs
+tmp
 
 Dockerfile

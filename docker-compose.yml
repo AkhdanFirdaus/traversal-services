@@ -2,13 +2,14 @@ services:
   engine:
     container_name: traversal-engine
     build: .
-    command: ['php', '-S', "0.0.0.0:8080", "/app/public/server.php"]
+    command: ['php', '-S', "0.0.0.0:8080", "/app/main_server.php"]
     ports:
       - "8080:8080"
     volumes:
       - .:/app
-      - ./output:/app/output
-      - ./tmp:/app/tmp
+      - ./logs:/app/logs
+      - ./outputs:/app/outputs
+      - ./tmp:/tmp
     env_file:
       - .env
     environment:

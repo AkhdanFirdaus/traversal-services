@@ -30,33 +30,7 @@ Identify files handling:
 * git ls-files output.
 * PHPUnit report.
 * Mutation testing report.
-* patterns.json (contains common path traversal patterns and their associated CWEs, encodings, and notes).
-
-**Output:
-A raw JSON array `[{"file": "...", "reason": "...", "related_tests": ["...", ...]}, ...]`. Omit markdown formatting such as code blocks or quotes. Each object should contain:
-* file: Path to the PHP file.
-* reason: Concise reason for selection related to directory/path traversal (e.g., "Uses user input in include without sanitization.", "Low mutation score in path validation for file upload.", "Handles dynamic file download based on user input.").
-* related_test_files: List of related test files already present.
-
-**Example Output:** 
-```JSON
-[
-  {
-    "file": "src/controllers/FileController.php",
-    "reason": "Handles dynamic file access via `file_get_contents` with unsanitized user input.",
-    "related_test_files": [
-      "tests/FileControllerTest.php"
-    ]
-  },
-  {
-    "file": "src/PathHelper.php",
-    "reason": "Low mutation score in path normalization logic related to `../` patterns.",
-    "related_test_files": [
-      "tests/PathHelperTest.php"
-    ]
-  }
-]```
-***     
+* patterns.json (contains common path traversal patterns and their associated CWEs, encodings, and notes).    
 EOT;
     }
 

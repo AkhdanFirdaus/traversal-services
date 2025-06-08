@@ -19,8 +19,8 @@ class RepositoryCloner
     public function run(): void {
         try {
             $this->createTemporaryDirectory();
-            $this->clone($this->url, $this->tmpDirectory);
-            $this->installDependencies($this->tmpDirectory);
+            $this->clone($this->url);
+            $this->installDependencies();
         } catch (\Throwable $th) {
             throw new \RuntimeException("Error: " . $th->getMessage());
         }
@@ -51,9 +51,9 @@ class RepositoryCloner
         rmdir($this->tmpDirectory);
     }
 
-    private function clone(string $url, bool $destination): void
+    private function clone(string $url): void
     {
-        $process = new Process(['git', 'clone', $url, $destination]);
+        $process = new Process(['git', 'clone', $url, $this->tmpDirectory]);
         $process->run();
         
         if (!$process->isSuccessful()) {
@@ -61,9 +61,9 @@ class RepositoryCloner
         }
     }
 
-    private function installDependencies(string $directory): void
+    private function installDependencies(): void
     {
-        $process = new Process(['composer', 'install', '--no-interaction', '--optimize-autoloader', '--no-progress', '--prefered-dist'], $directory);
+        $process = new Process(['composer', 'install', '--no-interaction', '--optimize-autoloader', '--no-progress'], $this->tmpDirectory);
         $process->setTimeout(3600);
         $process->run();
 

@@ -22,11 +22,11 @@ class FileHelper
     {
         $dir = dirname($filePath);
         if (!mkdir($dir, 0775, true) && !is_dir($dir)) { // Check is_dir again in case of race condition
-            throw new \RuntimeException("Failed to create Infection configuration file");
+            throw new \RuntimeException("Failed to create $filePath configuration file");
         }
 
         if (file_put_contents($filePath, $data) === false) {
-            throw new \RuntimeException("Failed to create Infection configuration file");
+            throw new \RuntimeException("Failed to create $filePath configuration file");
         }
         
         return true;

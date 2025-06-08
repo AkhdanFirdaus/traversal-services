@@ -1,21 +1,13 @@
-# Konfigurasi Aplikasi Dasar
 APP_ENV=development # development, production
 APP_DEBUG=true
 LOG_PATH=tmp/app.log
 LOG_LEVEL=DEBUG # DEBUG, INFO, WARNING, ERROR
 HTTP_CLIENT_TIMEOUT=60.0
 
-# Path Konfigurasi
 PATTERNS_JSON_PATH=config/patterns.json
-
-# Path Direktori Kerja
-BASE_CLONE_DIR=tmp/clones
-BASE_EXPORT_DIR=reports/exported_test_cases
-REPORTS_DIR=reports
 
 # --- Konfigurasi LLM ---
 # Tentukan urutan preferensi LLM, dipisahkan koma (opsional, jika tidak ada, akan dicoba sesuai urutan di kode)
-# Contoh: LLM_PREFERENCE_ORDER="gemini,anthropic,openai"
 LLM_PREFERENCE_ORDER="gemini,openai,anthropic"
 
 # Google Gemini
@@ -31,12 +23,4 @@ ANTHROPIC_API_KEY=""
 ANTHROPIC_MODEL_NAME="claude-3-haiku-20240307" # atau claude-3-sonnet-20240229, claude-3-opus-20240229
 ANTHROPIC_API_VERSION="2023-06-01" # Versi API Anthropic
 
-# --- Konfigurasi Socket.IO Server ---
-# URL server Socket.IO tempat PHP akan mengirim pembaruan
-# Contoh: http://localhost:3000 (jika server Socket.IO Anda berjalan di port 3000)
 SOCKET_IO_SERVER_URL=""
-# Nama event utama untuk pembaruan progres (opsional, bisa di-hardcode)
-SOCKET_IO_PROGRESS_EVENT="pipeline_progress"
-
-# Konfigurasi untuk REST API (jika diperlukan, misal untuk autentikasi sederhana)
-# API_SECRET_KEY=""

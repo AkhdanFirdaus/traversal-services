@@ -12,12 +12,13 @@ use Gemini\Enums\ResponseMimeType;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process as ProcessProcess;
 use Utils\FileHelper;
+use Utils\PromptBuilder;
 
 class AiTestGenerator
 {
     private Client $client;
 
-    public function __construct() {
+    public function __construct(private string $projectDir) {
         $this->client = Gemini::client($_ENV['GEMINI_API_KEY']);
     }
 
@@ -40,15 +41,15 @@ class AiTestGenerator
         }
     }
 
-    private function getProjectStructure($projectDir): string {
-        $process = new ProcessProcess(['git', 'ls-files'], $projectDir);
+    private function getProjectStructure(): string {
+        $process = new ProcessProcess(['git', 'ls-files'], $this->projectDir);
         $process->run();
 
         if (!$process->isSuccessful()) {
             throw new ProcessFailedException($process);
         }
 
-        $target = $projectDir . DIRECTORY_SEPARATOR . 'git-lsfiles-output.txt';
+        $target = $this->projectDir . DIRECTORY_SEPARATOR . 'git-lsfiles-output.txt';
         if (FileHelper::writeFile($target, $process->getOutput())) {
             return $target;
         } else {
@@ -56,16 +57,16 @@ class AiTestGenerator
         }
     }
 
-    public function analyzeSystems($projectDir, $phpUnitReport, $mutationReport) {
+    public function analyzeSystems($phpUnitReport, $mutationReport) {
         // git ls-files, phpunit report, mutation testing report, patterns.json
         $fileToAnalyze = [
-            $this->getProjectStructure($projectDir),
+            $this->getProjectStructure($this->projectDir),
             $phpUnitReport,
             $mutationReport,
             
         ];
         $this->uploadFiles($fileToAnalyze);
-        $this->client
+        $result = $this->client
             ->generativeModel(model: 'gemini-2.5-flash')
             ->withGenerationConfig(
                 generationConfig: new GenerationConfig(
@@ -98,7 +99,11 @@ class AiTestGenerator
                         )
                     )
                 )
-            );
+            )->generateContent([
+                PromptBuilder::analyzeSystem(),
+            ]);
+
+        echo json_encode($result->json(), JSON_PRETTY_PRINT);
         
     }
 } 
