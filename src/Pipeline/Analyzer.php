@@ -11,7 +11,7 @@ use Utils\SocketNotifier;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 
-class HeuristicAnalyzer
+class Analyzer
 {
     private Parser $parser;
     private NodeTraverser $traverser;
@@ -19,8 +19,6 @@ class HeuristicAnalyzer
     private string $detectedTestDirectory;
     
     public function __construct(
-        private Logger $logger,
-        private SocketNotifier $notifier,
         private string $repoPath,
     ) {
         $this->parser = (new ParserFactory)->createForHostVersion();
@@ -32,9 +30,6 @@ class HeuristicAnalyzer
 
     public function analyze(string $targetDir): array
     {
-        $this->logger->info("Starting heuristic analysis", ['dir' => $targetDir]);
-        $this->notifier->sendUpdate("Starting code analysis", 25);
-
         $vulnerabilities = [];
         $fileCount = 0;
         $analyzedCount = 0;
@@ -86,30 +81,19 @@ class HeuristicAnalyzer
                         }
                     }
                 } catch (\Throwable $e) {
-                    $this->logger->warning("Failed to analyze file", [
-                        'file' => $file->getPathname(),
-                        'error' => $e->getMessage()
-                    ]);
                 }
             }
         }
 
-        $this->logger->info("Heuristic analysis completed", [
-            'filesAnalyzed' => $analyzedCount,
-            'vulnerabilitiesFound' => count($vulnerabilities)
-        ]);
-
-        $this->notifier->sendUpdate("Code analysis completed", 50);
-
         return $vulnerabilities;
     }
 
-    public function getProperRepoPath(): string
+    public function getProjectDir(): string
     {
         return '/app/' . $this->repoPath;
     }
 
-    public function getDetectedTestDirectory(): string
+    public function getDetectedTestDir(): string
     {
         return '/app/' . $this->detectedTestDirectory;
     }

@@ -30,10 +30,14 @@ COPY . .
 RUN composer dump-autoload --optimize
 
 # Create necessary directories with proper permissions
-RUN mkdir -p /app/tmp/clones_cli /app/tmp/clones_api \
-    /app/reports/heuristic_analysis /app/reports/msi_reports \
-    /app/reports/exported_test_cases_cli /app/reports/exported_test_cases_api \
-    && chmod -R 777 /app/tmp /app/reports
+RUN mkdir -p \
+    /app/tmp/clones_cli \
+    /app/tmp/clones_api \
+    /app/output/heuristic_analysis \
+    /app/output/msi_output \
+    /app/output/exported_test_cases_cli \
+    /app/output/exported_test_cases_api \
+    && chmod -R 777 /app/tmp /app/output
 
 # Set environment variables
 ENV APP_ENV=production

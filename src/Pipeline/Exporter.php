@@ -42,17 +42,17 @@ class Exporter
         }
 
         // Create downloadable ZIP archive from the export directory
-        // $this->logger->info("Exporting test cases", [
-        //     'exportDir' => $exportDir,
-        //     'testFiles' => count($testFiles)
-        // ]);
-        // $zipPath = $this->createZipArchive($exportDir, $repoPath, $selectedTests);
+        $this->logger->info("Exporting test cases", [
+            'exportDir' => $exportDir,
+            'testFiles' => count($testFiles)
+        ]);
+        $zipPath = $this->createZipArchive($exportDir, $repoPath, $testFiles);
 
         $this->notifier->sendUpdate("Test export completed", 95);
 
         return [
             'exportDir' => $exportDir,
-            'zipPath' => ''
+            'zipPath' => $zipPath
         ];
     }
 

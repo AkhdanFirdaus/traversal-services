@@ -4,6 +4,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use App\AppService;
 use Utils\Logger;
+use Utils\SocketNotifier;
 
 // Set environment for API mode
 $_ENV['APP_ENV'] = 'api';
@@ -28,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $logger = new Logger();
+$socket = new SocketNotifier($logger);
 
 try {
     // Get JSON body
@@ -37,7 +39,7 @@ try {
         throw new \InvalidArgumentException('Repository URL is required');
     }
 
-    $app = new AppService();
+    $app = new AppService($logger, $socket);
     $results = $app->handleProcessRepo($input['repositoryUrl'], true);
 
     echo json_encode([

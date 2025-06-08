@@ -13,17 +13,15 @@ use Pipeline\Cleaner;
 use Utils\Logger;
 use Utils\SocketNotifier;
 use Dotenv\Dotenv;
+use Pipeline\Analyzer;
+use Pipeline\PhpUnitRunner;
 
 class AppService
 {
-    private Logger $logger;
-    private SocketNotifier $notifier;
     private string $taskId;
 
-    public function __construct(Logger $logger)
+    public function __construct(private Logger $logger, private SocketNotifier $notifier)
     {
-        $this->logger = $logger;
-        $this->notifier = new SocketNotifier();
         $this->loadEnvironment();
         $this->taskId = uniqid('task_', true);
     }
@@ -31,7 +29,7 @@ class AppService
     private function loadEnvironment(): void
     {
         try {
-            $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
+            $dotenv = Dotenv::createImmutable('/app/');
             $dotenv->load();
         } catch (\Dotenv\Exception\InvalidPathException $e) {
             $this->logger->warning(".env file not found. Relying on system environment variables or defaults", [
@@ -47,24 +45,25 @@ class AppService
             $this->notifier->sendUpdate("Starting repository processing", 0);
 
             // Step 1: Clone Repository
-            $cloner = new RepositoryCloner($this->logger, $this->notifier);
-            $repoPath = $cloner->clone($repoUrl, $isApi);
+            $cloner = new RepositoryCloner($repoUrl);
+            $cloner->run();
+            $repoPath = $cloner->getTempDirectory();
 
-            // Step 2: Heuristic Analysis
-            $analyzer = new HeuristicAnalyzer($this->logger, $this->notifier, $repoPath);
-            $vulnerabilities = $analyzer->analyze($repoPath);
+            // Step 2: PHP Unit Analysis
+            $phpUnitRunner = new PhpUnitRunner($repoPath);
+            $unitResult = $phpUnitRunner->run();
 
             // Step 3: Initial Infection Run
             $infectionRunner = new InfectionRunner(
                 $this->logger, 
                 $this->notifier, 
-                $analyzer->getProperRepoPath(), 
-                $analyzer->getDetectedTestDirectory(),
+                $analyzer->getProjectDir(), 
+                $analyzer->getDetectedTestDir(),
             );
             $initialMsi = $infectionRunner->run();
 
             // Step 4: Generate AI Test Cases
-            $generator = new AiTestGenerator($this->logger, $this->notifier, $analyzer->getProperRepoPath());
+            $generator = new AiTestGenerator($this->logger, $this->notifier, $analyzer->getProjectDir());
             $testCases = $generator->generate($vulnerabilities, $initialMsi['escapedMutants']);
 
             // // Step 5: Select and Export Tests
@@ -80,20 +79,20 @@ class AppService
             $exporter = new Exporter(
                 $this->logger, 
                 $this->notifier,
-                $analyzer->getProperRepoPath(), 
-                $analyzer->getDetectedTestDirectory(),
+                $analyzer->getProjectDir(), 
+                $analyzer->getDetectedTestDir(),
             );
             
             $exportResult = $exporter->export(
-                $analyzer->getProperRepoPath(), 
-                $analyzer->getDetectedTestDirectory(), 
+                $analyzer->getProjectDir(), 
+                $analyzer->getDetectedTestDir(), 
                 $isApi,
             );
 
             // Step 8: Generate Reports
             $reporter = new Reporter($this->logger, $this->notifier);
             $reports = $reporter->generateReports(
-                $analyzer->getProperRepoPath(),
+                $analyzer->getProjectDir(),
                 $vulnerabilities,
                 $initialMsi,
                 $finalMsi,

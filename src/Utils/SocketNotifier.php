@@ -14,6 +14,7 @@ class SocketNotifier
     {
         $this->logger = new Logger();
         $this->initializeClient();
+        
     }
 
     private function initializeClient(): void

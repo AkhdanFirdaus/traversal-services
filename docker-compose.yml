@@ -1,34 +1,18 @@
 services:
   engine:
     container_name: traversal-engine
-    build: ./engine
+    build: .
     command: ['php', '-S', "0.0.0.0:8080", "/app/public/server.php"]
     ports:
       - "8080:8080"
     volumes:
-      - ./engine:/app
-      - ./reports/engine:/app/reports
+      - .:/app
+      - ./output:/app/output
       - ./tmp:/app/tmp
     env_file:
       - .env
     environment:
       - XDEBUG_MODE=coverage,debug
-      - TZ=Asia/Jakarta
-    depends_on:
-      - socket
-    networks:
-      - traversal
-
-  socket:
-    container_name: traversal-socket
-    build: ./socket
-    volumes:
-      - ./socket:/app
-      - ./reports/socket:/app/logs
-    ports:
-      - "3000:3000"
-    environment:
-      - APP_ENV=development
       - TZ=Asia/Jakarta
     networks:
       - traversal
