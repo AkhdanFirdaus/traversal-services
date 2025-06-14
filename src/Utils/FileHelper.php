@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Utils;
 
+use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\Process;
+
 class FileHelper
 {
     public static function readFile(string $filePath): string
@@ -113,5 +116,27 @@ class FileHelper
         }
         $logger?->info("Successfully deleted directory: {dirPath}", ['dirPath' => $dirPath]);
         return true;
+    }
+
+    public static function getProjectStructure(Logger $logger, string $projectDir, string $outputDir, $iterate): mixed {
+        $logger->info('AIGenerator: Listing Project Structure using `git ls-files`');
+
+        $process = new Process(['git', 'ls-files'], $projectDir);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            throw new ProcessFailedException($process);
+        }
+
+        $target = $outputDir . DIRECTORY_SEPARATOR . "git-lsfiles-output-$iterate.txt";
+        $content = $process->getOutput();
+        if (file_put_contents($target, $content)) {
+            return [
+                'path' => $target,
+                'content' => $content,
+            ];
+        } else {
+            throw new \Exception('Failed save git ls-files');
+        }
     }
 }

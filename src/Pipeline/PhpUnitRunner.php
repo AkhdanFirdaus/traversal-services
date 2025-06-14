@@ -10,6 +10,7 @@ use Utils\Logger;
 
 class PhpUnitRunner {
     private string $configPath;
+    private mixed $content;
     
     public function __construct(private string $projectDir, private string $testDir, private string $outputDir, private Logger $logger) {
         $phpUnitConfig = new ConfigPHPUnit($projectDir, $testDir, 'outputs');
@@ -38,10 +39,16 @@ class PhpUnitRunner {
 
             $this->logger->info('Success run phpunit');
 
-            return [
-                'coverage' => FileHelper::readFile($this->projectDir . '/outputs/index.xml'),
-                'junit' => FileHelper::readFile($this->projectDir . '/outputs/junit.xml'),
-            ];
+            
+            $content = [];
+            
+            foreach ($this->getReportsPath() as $unit) {
+                $content[basename($unit)] = FileHelper::readFile($unit);
+            }
+
+            $this->content = $content;
+
+            return $content;
         } catch (\Throwable $th) {
             $this->logger->error('Failed run phpunit', [
                 'stack' => $th->getTraceAsString(),
@@ -59,5 +66,9 @@ class PhpUnitRunner {
         });
 
         return array_map(fn($file) => "$this->projectDir/outputs/$file", array_values($files));
+    }
+
+    public function saveReport(string $filename) : void{
+        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . $filename, json_encode($this->content, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 }

@@ -14,8 +14,9 @@ use Utils\SocketNotifier;
 class InfectionRunner
 {
     private string $configPath;
+    private string $content;
 
-    public function __construct(private string $projectDir, private string $testDir, private Logger $logger) {
+    public function __construct(private string $projectDir, private string $testDir, private string $outputDir, private Logger $logger) {
         $infectionConfig = new ConfigInfection($projectDir, $testDir, 'outputs');
         $infectionConfig->write();
         $this->configPath = $infectionConfig->getConfigPath();
@@ -41,37 +42,19 @@ class InfectionRunner
         
         $this->logger->info('Success run infection runner');
 
-        return $this->parseResults();
+        $this->content = FileHelper::readFile($this->projectDir . '/outputs/infection-report.json');
+        
+        return $this->content;
     }
 
     public function getReportPath() : string {
         return $this->projectDir . '/outputs/infection-report.json';
     }
 
-    private function parseResults(): mixed
+    public function saveReport($filename): void
     {
-        $results = [];
+        $report = json_decode($this->content, true)['stats'];
 
-        $content = FileHelper::readFile($this->projectDir . '/outputs/infection-report.json');
-
-        if ($content) {
-            $report = json_decode($content, true);
-            $results = $report['stats'];
-        }
-
-        return $results;
+        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . $filename, json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
-
-    // public function copyTestsToRepo($testCases): void {
-    //     // Export each test case
-    //     // $this->logger->info("Copying test cases to repository", ['testCount' => count($testCases)]);
-    //     foreach ($testCases as $index => $test) {
-    //         $filename = FileHelper::saveTestCode($this->testDir, $test['generatedSourceCode']);
-
-    //         // $this->logger->info("Exported test case", [
-    //         //     'file' => $filename,
-    //         //     'type' => $test['type']
-    //         // ]);
-    //     }
-    // }
 } 

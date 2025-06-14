@@ -62,14 +62,15 @@ class AppService
             $infectionRunner = new InfectionRunner(
                 $projectDir, 
                 'tests', 
+                $outputDir,
                 $this->logger,
             );
             
-            $unitResult = $phpUnitRunner->run();
-            $initialMsi = $infectionRunner->run();
+            $initialUnit = $phpUnitRunner->run();
+            $phpUnitRunner->saveReport('phpunit-initial.json');
 
-            file_put_contents($outputDir . DIRECTORY_SEPARATOR . 'phpunit-initial.json', json_encode($unitResult, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-            file_put_contents($outputDir . DIRECTORY_SEPARATOR . 'msi-initial.json', json_encode($initialMsi, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            $initialMsi = $infectionRunner->run();
+            $infectionRunner->saveReport('msi-initial.json');
 
             // Step 3: Generate AI Test Cases
             $generator = new AiTestGenerator(
@@ -78,38 +79,52 @@ class AppService
                 $this->logger,
             );
             
-            for ($i=1; $i <= 2; $i++) { 
+            $projectStructure = FileHelper::getProjectStructure($this->logger, $projectDir, $outputDir, 'initial');
+            $analizeSystem = $generator->analyzeSystems(
+                $projectStructure['path'],
+                $phpUnitRunner->getReportsPath(),
+                $infectionRunner->getReportPath(),
+            );
+
+            $this->logger->info('AIGenerator: Preparing to Generate Test Case using Function Calling...');
+            
+            $unitResults = $initialUnit;
+            $mutation_report = $initialMsi;
+            
+            for ($i=1; $i <= 5; $i++) { 
                 try {
                     $this->logger->info("Iteration-$i");
-    
-                    $analizeSystem = $generator->analyzeSystems(
-                        $phpUnitRunner->getReportsPath(),
-                        $infectionRunner->getReportPath(),
-                        $i,
-                    );
                     
+                    $projectStructure = FileHelper::getProjectStructure($this->logger, $projectDir, $outputDir, 'initial');
                     $generatedResult = $generator->generateTestCase(
                         $analizeSystem['analyze_results'],
-                        $analizeSystem['project_structure'],
-                        $unitResult['junit'],
-                        $unitResult['coverage'],
-                        $analizeSystem['mutation_report'],
+                        $projectStructure['content'],
+                        $unitResults,
+                        $mutation_report,
                         $i
                     );
                     
                     $exportPath = $generator->rewriteCode($generatedResult);
+
+                    $unitRes = $phpUnitRunner->run();
+                    $phpUnitRunner->saveReport("phpunit-$i.json");
+                    
+                    $msiRes = $infectionRunner->run();
+                    $infectionRunner->saveReport("msi-$i.json");
+
+                    $unitResults = $unitRes;
+                    $mutation_report = $msiRes;
                     
                 } catch (\Throwable $th) {
+                    $this->logger->error("Iteration-$i failed to generate", [
+                        'stack' => $th->getTraceAsString(),
+                        'error' => $th->getMessage(),
+                    ]);
                     continue;
                 }
             }
             
             // // Step 4: Final PHP Unit Analysis and Infection Run
-            $unitRes = $phpUnitRunner->run();
-            $msiRes = $infectionRunner->run();
-            
-            file_put_contents($outputDir . DIRECTORY_SEPARATOR . "phpunit-$i.json", json_encode($unitRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-            file_put_contents($outputDir . DIRECTORY_SEPARATOR . "msi-$i.json", json_encode($msiRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
             
             // // Step 5: Export Tests
             $exporter = new Exporter(

@@ -61,29 +61,13 @@ class AiTestGenerator
 
     }
 
-    private function getProjectStructure($iterate): string {
-        $this->logger->info('AIGenerator: Listing Project Structure using `git ls-files`');
+    
 
-        $process = new Process(['git', 'ls-files'], $this->projectDir);
-        $process->run();
-
-        if (!$process->isSuccessful()) {
-            throw new ProcessFailedException($process);
-        }
-
-        $target = $this->outputDir . DIRECTORY_SEPARATOR . "git-lsfiles-output-$iterate.txt";
-        if (file_put_contents($target, $process->getOutput())) {
-            return $target;
-        } else {
-            throw new \Exception('Failed save git ls-files');
-        }
-    }
-
-    public function analyzeSystems(array $phpUnitReport, $mutationReport, $iterate): mixed {
+    public function analyzeSystems(string $projectStructurePath, array $phpUnitReport, $mutationReport): mixed {
         $this->logger->info('AIGenerator: Analyzing Systems...');
         $fileToAnalyze = [
             [
-                'path' => $this->getProjectStructure($iterate),
+                'path' => $projectStructurePath,
                 'mime' => MimeType::TEXT_PLAIN,
                 'display' => 'git ls-config'
             ],
@@ -153,11 +137,11 @@ class AiTestGenerator
         $payload = json_encode($fileToAnalyze, JSON_PRETTY_PRINT);
         $resultsJson = json_encode($results->json(), JSON_PRETTY_PRINT);
         
-        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "analyze-payload-$iterate.json", $payload);
-        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "analyze-results-$iterate.json", $resultsJson);
+        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "analyze-payload.json", $payload);
+        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "analyze-results.json", $resultsJson);
 
         return [
-            'analyze_results' => FileHelper::readFile($this->outputDir . DIRECTORY_SEPARATOR . "analyze-results-$iterate.json"),
+            'analyze_results' => FileHelper::readFile($this->outputDir . DIRECTORY_SEPARATOR . "analyze-results.json"),
             'project_structure' => FileHelper::readFile($fileToAnalyze[0]['path']),
             'mutation_report' => FileHelper::readFile($fileToAnalyze[2]['path']),
         ];
@@ -232,46 +216,42 @@ class AiTestGenerator
         );
     }
 
-    private function buildContextPrompt(
-        string $projectStructure, 
-        string $unitTestRes, 
-        string $coverageReport, 
-        string $mutationReport,
-    ): string {
-        $prompt = "Project Directory Contents:\n";
-        $prompt .= $projectStructure . "\n\n";
-        $prompt .= "Unit Test Results:\n";
-        $prompt .= $unitTestRes . "\n\n";
-        $prompt .= "Coverage Report:\n";
-        $prompt .= $coverageReport . "\n\n";
-        $prompt .= "Mutation Report\n";
-        $prompt .= $mutationReport;
-        return $prompt;
-    }
-
     public function generateTestCase(
         string $analyzerResults,
         string $projectStructure,
-        string $unitTestResult,
-        string $coverageReport,
+        array $unitResults,
         string $mutationReport,
         $iterate
     ): string {
-        $this->logger->info('AIGenerator: Preparing to Generate Test Case using Function Calling...');
         $this->logger->info('AIGenerator: Generating Test Cases with multi-turn conversation');
+        
+        $buildUnitContext = [];
+
+        foreach ($unitResults as $key => $value) {
+            $buildUnitContext[] = Content::parse(
+                part: "Unit Test Report for $key: \n$value",
+                role: Role::USER,
+            );
+        }
 
         $chat = $this->client
             ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
             ->withGenerationConfig(generationConfig: $this->getGenerationConfig())
             ->withTool($this->getFileContentTool())
             ->startChat(history: [
+                // sebagai konteks
                 Content::parse(
-                    part: $this->buildContextPrompt($projectStructure, $unitTestResult, $coverageReport, $mutationReport),
+                    part: "Project Directory Structure:\n$projectStructure",
+                    role: Role::USER,
+                ),
+                ...$buildUnitContext,
+                Content::parse(
+                    part: "Mutation Report:\n$mutationReport",
                     role: Role::USER,
                 ),
                 Content::parse(
                     part: "Analysis Results:\n$analyzerResults",
-                    role: Role::USER,
+                    role: Role::MODEL,
                 ),
             ]);
 
