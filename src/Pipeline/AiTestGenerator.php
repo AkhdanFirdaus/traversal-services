@@ -4,12 +4,19 @@ namespace Pipeline;
 
 use Gemini;
 use Gemini\Client;
+use Gemini\Data\Content;
+use Gemini\Data\FunctionCall;
+use Gemini\Data\FunctionDeclaration;
+use Gemini\Data\FunctionResponse;
 use Gemini\Data\GenerationConfig;
+use Gemini\Data\Part;
 use Gemini\Data\Schema;
+use Gemini\Data\Tool;
 use Gemini\Data\UploadedFile;
 use Gemini\Enums\DataType;
 use Gemini\Enums\MimeType;
 use Gemini\Enums\ResponseMimeType;
+use Gemini\Enums\Role;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 use Utils\FileHelper;
@@ -72,7 +79,7 @@ class AiTestGenerator
         }
     }
 
-    public function analyzeSystems(array $phpUnitReport, $mutationReport, $iterate): string {
+    public function analyzeSystems(array $phpUnitReport, $mutationReport, $iterate): mixed {
         $this->logger->info('AIGenerator: Analyzing Systems...');
         $fileToAnalyze = [
             [
@@ -149,94 +156,170 @@ class AiTestGenerator
         file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "analyze-payload-$iterate.json", $payload);
         file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "analyze-results-$iterate.json", $resultsJson);
 
-        return $this->outputDir . DIRECTORY_SEPARATOR . "analyze-results-$iterate.json";
+        return [
+            'analyze_results' => FileHelper::readFile($this->outputDir . DIRECTORY_SEPARATOR . "analyze-results-$iterate.json"),
+            'project_structure' => FileHelper::readFile($fileToAnalyze[0]['path']),
+            'mutation_report' => FileHelper::readFile($fileToAnalyze[2]['path']),
+        ];
     }
     
-    public function generateTestCase($analyzerResultPath, $iterate): string {
-        $this->logger->info('AIGenerator: Prepare to Generating Test Case...');
+    private function executeGetFileContent(string $filePath): string {
+        $fullPath = $this->projectDir . DIRECTORY_SEPARATOR . $filePath;
 
-        $analyzerResults = json_decode(FileHelper::readFile($analyzerResultPath), true);
-        
-        $fileToAnalyze = [];
-        $fileToAnalyze[] = [
-            'path' => $analyzerResultPath,
-            'mime' => MimeType::TEXT_PLAIN,
-            'display' => 'Analyze Results'
-        ];
-        
-        foreach ($analyzerResults as $item) {
-            $fileToAnalyze[] = [
-                'path' => $this->projectDir . DIRECTORY_SEPARATOR . $item['file'],
-                'mime' => MimeType::TEXT_PLAIN,
-                'display' => $item['file'],
-            ];
-            if (isset($item['related_test_files'])) {
-                foreach ($item['related_test_files'] as $testFile) {
-                    $flat[] = [
-                        'path' => $this->projectDir . DIRECTORY_SEPARATOR . $testFile,
-                        'mime' => MimeType::TEXT_PLAIN,
-                        'display' => $testFile
-                    ];
-                }
-            }
+        $this->logger->info('Function Call: Reading file', ['path' => $fullPath]);
+
+        try {
+            $content = FileHelper::readFile($fullPath);
+            return "--- Content of {$filePath} ---\n{$content}\n--- End Content ---";
+        } catch (\Throwable $th) {
+            return "Error reading file {$filePath}: {$th->getMessage()}";
         }
-
-        $this->uploadFiles($fileToAnalyze);
-
-        $this->logger->info('AIGenerator: Generating Test Cases based on analyzer');
-
-        $result = $this->client
-            ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
-            ->withGenerationConfig(
-                generationConfig: new GenerationConfig(
-                    temperature: 0.1,
-                    responseMimeType: ResponseMimeType::APPLICATION_JSON,
-                    responseSchema: new Schema(
-                        type: DataType::ARRAY,
-                        items: new Schema(
-                            type: DataType::OBJECT,
-                            properties: [
-                                'file_path' => new Schema(
-                                    type: DataType::STRING,
-                                    description: 'The new file path for the test case',
-                                    example: "tests/PathTraversalTest.php",
-                                ),
-                                'code' => new Schema(
-                                    type: DataType::STRING,
-                                    description: 'The complete PHP code content of the generated or improved PHPUnit test case. This code should be a valid PHP file content. Use proper escaping only for special characters in the JSON output.',
-                                    example: "<?php\n\nnamespace Tests;\n\nuse PHPUnit\\Framework\\TestCase;\n\nclass FileAccessProtectionTest extends TestCase\n{\n  private \$tempDir;\n\n  protected function setUp(): void\n  {\n    \$this->tempDir = sys_get_temp_dir() . '/' . uniqid('test_files_');\n    mkdir(\$this->tempDir);\n    file_put_contents(\$this->tempDir . '/safe.txt', 'This is safe content.');\n    file_put_contents(\$this->tempDir . '/secret.txt', 'This is secret content.');\n  }\n\n  protected function tearDown(): void\n  {\n    // Clean up temporary directory and files\n    if (is_dir(\$this->tempDir)) {\n      \$files = array_diff(scandir(\$this->tempDir), array('.', '..'));\n      foreach (\$files as \$file) {\n        unlink(\$this->tempDir . '/' . \$file);\n      }\n      rmdir(\$this->tempDir);\n    }\n  }\n\n  /**\n  * @dataProvider traversalAttemptProvider\n  */\n  public function testAttemptedPathTraversalIsRejected(string \$inputPath):\n  void\n  {\n    // Assuming 'read_file_from_user_input' is the vulnerable function\n    // You would typically mock or integrate with the actual application code here.\n    // For demonstration, let's simulate a vulnerable function.\n    \$expectedException = false;\n    try {\n      \$filePath = realpath(\$this->tempDir . '/' . \$inputPath);\n      if (strpos(\$filePath, \$this->tempDir) !== 0) {\n        // If the realpath goes outside our temp directory, it's a traversal attempt\n        \$expectedException = true;\n        throw new \\Exception('Path traversal detected');\n      }\n      // Simulate file read\n      // \$content = file_get_contents(\$filePath);\n    } catch (\\Exception \$e) {\n      if (!\$expectedException) {\n        \$this->fail('Unexpected exception: ' . \$e->getMessage());\n      }\n      \$this->assertStringContainsString('Path traversal detected', \$e->getMessage());\n      return;\n    }\n    \$this->assertTrue(!\$expectedException, 'Path traversal was not rejected for: ' . \$inputPath);\n  }\n\n  public static function traversalAttemptProvider(): array\n  {\n    return [\n      'basic traversal' => ['../secret.txt'],\n      'double dot slash' => ['../../etc/passwd'],\n      'mixed slashes' => ['..\\/..\\/windows\\system32'],\n      'null byte injection' => ['safe.txt%00.png'],\n      'url encoded' => ['%2e%2e%2fsecret.txt'],\n      'double encoded' => ['%252e%252e%252fsecret.txt'],\n      'directory up one level' => ['safe/../secret.txt'],\n      'filename with extra dots' => ['safe.txt....'],\n      'unicode traversal' => ['%u002e%u002e%u002fsecret.txt'] // Example, assuming system decodes unicode\n    ];\n  }\n\n  public function testSafeFilePathIsAccessedCorrectly(): void\n  {\n    // Assuming 'read_file_from_user_input' is the function being tested\n    // In a real scenario, you'd call the actual method here.\n    \$inputPath = 'safe.txt';\n    \$filePath = realpath(\$this->tempDir . '/' . \$inputPath);\n    \$this->assertStringContainsString(\$this->tempDir . DIRECTORY_SEPARATOR . 'safe.txt', \$filePath);\n    \$this->assertFileExists(\$filePath);\n    // \$content = file_get_contents(\$filePath);\n    // \$this->assertEquals('This is safe content.', \$content);\n  }\n}\n"
-                                ),
-                            ],
-                            required: ['file_path', 'code'],
-                        )
-                    )
-                )
-            )
-            ->generateContent([
-                ...$this->uploadedFiles,
-                PromptBuilder::generatorPrompt()
-            ]);
-            
-        $resultsJson = json_encode($result->json(), JSON_PRETTY_PRINT);
-        $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate.json";
-        file_put_contents($resultsPath, $resultsJson);
-
-        return $resultsPath;
     }
 
-    public function rewriteCode($generatedPath) : string {
-        $this->logger->info('AIGenerator: Rewriting Code with New Test Case');
+    private function getGenerationConfig(): GenerationConfig {
+        return new GenerationConfig(temperature: 0.1);
+    }
 
-        $generatedCode = json_decode(FileHelper::readFile($generatedPath), true);
+    private function getFileContentTool(): Tool {
+        return new Tool(
+            functionDeclarations: [
+                new FunctionDeclaration(
+                    name: 'get_file_content',
+                    description: "Retrieves file content from the project directory",
+                    parameters: new Schema(
+                        type: DataType::OBJECT,
+                        properties: [
+                            'file_path' => new Schema(
+                                type: DataType::STRING,
+                                description: 'Relative path to the source code file from the project root'
+                            ),
+                        ],
+                        required: ['file_path']
+                    ),
+                )
+            ]
+        );
+    }
 
-        foreach ($generatedCode as $item) {
-            $dest = $item['file_path'];
-            file_put_contents(
-                $this->projectDir . DIRECTORY_SEPARATOR . $dest, 
-                $item['code'],
+    private function handleFunctionCall(FunctionCall $functionCall): Content {
+        if ($functionCall->name === 'get_file_content') {
+            $filePath = $functionCall->args['file_path'];
+            $result = $this->executeGetFileContent($filePath);
+
+            return new Content(
+                parts: [
+                    new Part(
+                        functionResponse: new FunctionResponse(
+                            name: 'get_file_content',
+                            response: ['content' => $result]
+                        )
+                    )
+                ],
+                role: Role::MODEL,
             );
         }
 
-        return $this->projectDir . DIRECTORY_SEPARATOR . 'tests';
+        return new Content(
+            parts: [
+                new Part(
+                    functionResponse: new FunctionResponse(
+                        name: $functionCall->name,
+                        response: ['error' => 'Unknown function called.']
+                    )
+                )
+            ],
+            role: Role::MODEL,
+        );
+    }
+
+    private function buildContextPrompt(
+        string $projectStructure, 
+        string $unitTestRes, 
+        string $coverageReport, 
+        string $mutationReport,
+    ): string {
+        $prompt = "Project Directory Contents:\n";
+        $prompt .= $projectStructure . "\n\n";
+        $prompt .= "Unit Test Results:\n";
+        $prompt .= $unitTestRes . "\n\n";
+        $prompt .= "Coverage Report:\n";
+        $prompt .= $coverageReport . "\n\n";
+        $prompt .= "Mutation Report\n";
+        $prompt .= $mutationReport;
+        return $prompt;
+    }
+
+    public function generateTestCase(
+        string $analyzerResults,
+        string $projectStructure,
+        string $unitTestResult,
+        string $coverageReport,
+        string $mutationReport,
+        $iterate
+    ): string {
+        $this->logger->info('AIGenerator: Preparing to Generate Test Case using Function Calling...');
+        $this->logger->info('AIGenerator: Generating Test Cases with multi-turn conversation');
+
+        $chat = $this->client
+            ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
+            ->withGenerationConfig(generationConfig: $this->getGenerationConfig())
+            ->withTool($this->getFileContentTool())
+            ->startChat(history: [
+                Content::parse(
+                    part: $this->buildContextPrompt($projectStructure, $unitTestResult, $coverageReport, $mutationReport),
+                    role: Role::USER,
+                ),
+                Content::parse(
+                    part: "Analysis Results:\n$analyzerResults",
+                    role: Role::USER,
+                ),
+            ]);
+
+        $response = $chat->sendMessage(PromptBuilder::generatorPrompt());
+
+        while ($response->parts()[0]->functionCall !== null) {
+            $functionCall = $response->parts()[0]->functionCall;
+
+            $this->logger->info('AIGenerator: Model requested function call.', [
+                'name' => $functionCall->name,
+                'args' => $functionCall->args,
+            ]);
+            
+            $functionResponseContent = $this->handleFunctionCall($functionCall);
+            $response = $chat->sendMessage($functionResponseContent);
+        }
+
+        $this->logger->info('AIGenerator: Received final response from the model.');
+
+        $finalResponseJson = substr($response->text(), 7, -3);
+        $finalResponseJson = preg_replace('/^json\\n|$/m', '', trim($finalResponseJson));
+
+        $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate.json";
+        file_put_contents($resultsPath, $finalResponseJson);
+
+        return $finalResponseJson;
+    }
+
+    public function rewriteCode($generated) : string {
+        try {
+            $this->logger->info('AIGenerator: Rewriting Code with New Test Case');
+
+            $generatedCode = json_decode($generated, true);
+
+            $dest = $generatedCode['file_path'];
+            file_put_contents(
+                $this->projectDir . DIRECTORY_SEPARATOR . $dest, 
+                $generatedCode['code'],
+            );
+
+            return $this->projectDir . DIRECTORY_SEPARATOR . 'tests';
+
+        } catch (\Throwable $th) {
+            $this->logger->error('Failed Rewrite File', [
+                'stack' => $th->getTrace(),
+                'error' => $th->getMessage(),
+            ]);
+            throw $th;
+        }
     }
 } 

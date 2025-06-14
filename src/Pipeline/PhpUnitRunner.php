@@ -18,29 +18,37 @@ class PhpUnitRunner {
     }
 
     public function run(): mixed {
-        $process = new Process([
-            'vendor/bin/phpunit', 
-            '--coverage-xml', 
-            'outputs', 
-            '--log-junit', 
-            'outputs/junit.xml',
-            '--coverage-filter',
-            'src'
-        ], $this->projectDir);
-        
-        $process->run();
+        try {
+            $process = new Process([
+                'vendor/bin/phpunit', 
+                '--coverage-xml', 
+                'outputs', 
+                '--log-junit', 
+                'outputs/junit.xml',
+                '--coverage-filter',
+                'src'
+            ], $this->projectDir);
+            
+            $process->run();
 
-        if (!$process->isSuccessful()) {
-            $this->logger->error('Failed run phpunit', ['error' => $process->getErrorOutput()]);
-            throw new ProcessFailedException($process);
+            if (!$process->isSuccessful()) {
+                $this->logger->error('Failed run phpunit', ['error' => $process->getErrorOutput()]);
+                throw new ProcessFailedException($process);
+            }
+
+            $this->logger->info('Success run phpunit');
+
+            return [
+                'coverage' => FileHelper::readFile($this->projectDir . '/outputs/index.xml'),
+                'junit' => FileHelper::readFile($this->projectDir . '/outputs/junit.xml'),
+            ];
+        } catch (\Throwable $th) {
+            $this->logger->error('Failed run phpunit', [
+                'stack' => $th->getTraceAsString(),
+                'error' => $th->getMessage(),
+            ]);
+            throw $th;
         }
-
-        $this->logger->info('Success run phpunit');
-
-        return [
-            'coverage' => FileHelper::readFile($this->projectDir . '/outputs/index.xml'),
-            'junit' => FileHelper::readFile($this->projectDir . '/outputs/junit.xml'),
-        ];
     }
 
     public function getReportsPath(): array {

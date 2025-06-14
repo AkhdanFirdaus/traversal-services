@@ -79,40 +79,47 @@ class AppService
             );
             
             for ($i=1; $i <= 2; $i++) { 
-                $this->logger->info("Iteration-$i");
-
-                $analyzerResultPath = $generator->analyzeSystems(
-                    $phpUnitRunner->getReportsPath(),
-                    $infectionRunner->getReportPath(),
-                    $i,
-                );
-                
-                $generatedResultPath = $generator->generateTestCase(
-                    $analyzerResultPath,
-                    $i
-                );
-                
-                $exportPath = $generator->rewriteCode($generatedResultPath);
-                
-                // // Step 4: Final PHP Unit Analysis and Infection Run
-                $unitRes = $phpUnitRunner->run();
-                $msiRes = $infectionRunner->run();
-                
-                file_put_contents($outputDir . DIRECTORY_SEPARATOR . "phpunit-$i.json", json_encode($unitRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-                file_put_contents($outputDir . DIRECTORY_SEPARATOR . "msi-$i.json", json_encode($msiRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-                
-                // // Step 5: Export Tests
-                $exporter = new Exporter(
-                    $this->logger, 
-                    $this->notifier,
-                    $exportPath,
-                    $outputDir
-                );
+                try {
+                    $this->logger->info("Iteration-$i");
     
-                $exporter->run($i);
+                    $analizeSystem = $generator->analyzeSystems(
+                        $phpUnitRunner->getReportsPath(),
+                        $infectionRunner->getReportPath(),
+                        $i,
+                    );
+                    
+                    $generatedResult = $generator->generateTestCase(
+                        $analizeSystem['analyze_results'],
+                        $analizeSystem['project_structure'],
+                        $unitResult['junit'],
+                        $unitResult['coverage'],
+                        $analizeSystem['mutation_report'],
+                        $i
+                    );
+                    
+                    $exportPath = $generator->rewriteCode($generatedResult);
+                    
+                } catch (\Throwable $th) {
+                    continue;
+                }
             }
-
-
+            
+            // // Step 4: Final PHP Unit Analysis and Infection Run
+            $unitRes = $phpUnitRunner->run();
+            $msiRes = $infectionRunner->run();
+            
+            file_put_contents($outputDir . DIRECTORY_SEPARATOR . "phpunit-$i.json", json_encode($unitRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            file_put_contents($outputDir . DIRECTORY_SEPARATOR . "msi-$i.json", json_encode($msiRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            
+            // // Step 5: Export Tests
+            $exporter = new Exporter(
+                $this->logger, 
+                $this->notifier,
+                $exportPath,
+                $outputDir
+            );
+            
+            $exporter->run($i);
             // // Return final results
             // $results = [
             //     'taskId' => $this->taskId,

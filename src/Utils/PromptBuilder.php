@@ -82,8 +82,22 @@ Before outputting the final code block, you MUST internally verify it against th
 - [ ] Array Syntax: Array brackets [] are correctly matched.
 
 # 4. Output Format
-1. Provide a brief, one-sentence summary of the new test file's purpose.
-2. Generate the complete PHP code inside a single, clean code block.
+1. Every response you provide must be a JSON object adhering to the following structure:
+  - `file_path`: (String) The new file path for the test case (e.g., `tests/CsrfProtectionTest.php`).
+  - `code`: (String) The complete PHP code content of the generated or improved PHPUnit test case. This code should be a valid PHP file content.
+2. Strictly only output in JSON.. Omit markdown formatting such as code blocks or quotes.
+3. Use proper escaping only for special characters in the JSON output. For example:
+  - `use Some\\Namespace\\ClassName;\n``
+  - `\$foo = \"bar\";\n`
+  - `\$qux = 'qux';\n`
+3. Do not include any explanations, conversational text, or comments outside of the JSON structure or within the PHP code (unless they are code comments, e.g., for explaining a skipped test).
+
+## Example Output:
+
+{
+  "file_path": "path/to/your/new_or_improved_test.php",
+  "code": "<?php\n\nuse PHPUnit\\Framework\\TestCase;\n\nclass YourNewTest extends TestCase {\n ... \n"
+}
 EOT;
     }
 }
