@@ -14,13 +14,11 @@ use Utils\SocketNotifier;
 class InfectionRunner
 {
     private string $configPath;
-    private Logger $logger;
 
-    public function __construct(private string $projectDir, private string $testDir) {
+    public function __construct(private string $projectDir, private string $testDir, private Logger $logger) {
         $infectionConfig = new ConfigInfection($projectDir, $testDir, 'outputs');
         $infectionConfig->write();
         $this->configPath = $infectionConfig->getConfigPath();
-        $this->logger = new Logger();
     }
 
     public function run(): mixed

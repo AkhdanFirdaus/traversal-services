@@ -10,13 +10,11 @@ use Utils\Logger;
 
 class PhpUnitRunner {
     private string $configPath;
-    private Logger $logger;
-
-    public function __construct(private string $projectDir, private string $testDir, private string $outputDir) {
+    
+    public function __construct(private string $projectDir, private string $testDir, private string $outputDir, private Logger $logger) {
         $phpUnitConfig = new ConfigPHPUnit($projectDir, $testDir, 'outputs');
         $phpUnitConfig->write();
         $this->configPath = $phpUnitConfig->getConfigPath();
-        $this->logger = new Logger();
     }
 
     public function run(): mixed {

@@ -52,10 +52,10 @@ class Exporter
 
             $zip->close();
 
-            // $this->logger->info("Created ZIP archive", [
-            //     'path' => $zipPath,
-            //     'files' => count($selectedTests)
-            // ]);
+            $this->logger->info("Exporter: Created ZIP archive", [
+                'path' => $zipPath,
+                'files' => count($selectedTests)
+            ]);
 
             return $zipPath;
 

@@ -13,6 +13,7 @@ use Gemini\Enums\ResponseMimeType;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 use Utils\FileHelper;
+use Utils\Logger;
 use Utils\PromptBuilder;
 
 class AiTestGenerator
@@ -20,11 +21,15 @@ class AiTestGenerator
     private Client $client;
     private array $uploadedFiles = [];
 
-    public function __construct(private string $projectDir, private string $outputDir) {
+    public function __construct(private string $projectDir, private string $outputDir, private Logger $logger) {
         $this->client = Gemini::client($_ENV['GEMINI_API_KEY']);
     }
 
     private function uploadFiles(array $files) : void {
+        $this->logger->info('AIGenerator: Uploading Files', [
+            'files' => array_map(fn ($item) => $item['path'], $files),
+        ]);
+
         foreach ($files as $file) {
             $meta = $this->client->files()->upload(
                 filename: $file['path'],
@@ -49,7 +54,9 @@ class AiTestGenerator
 
     }
 
-    private function getProjectStructure(): string {
+    private function getProjectStructure($iterate): string {
+        $this->logger->info('AIGenerator: Listing Project Structure using `git ls-files`');
+
         $process = new Process(['git', 'ls-files'], $this->projectDir);
         $process->run();
 
@@ -57,31 +64,31 @@ class AiTestGenerator
             throw new ProcessFailedException($process);
         }
 
-        $target = $this->outputDir . DIRECTORY_SEPARATOR . 'git-lsfiles-output.txt';
-        if (FileHelper::writeFile($target, $process->getOutput())) {
+        $target = $this->outputDir . DIRECTORY_SEPARATOR . "git-lsfiles-output-$iterate.txt";
+        if (file_put_contents($target, $process->getOutput())) {
             return $target;
         } else {
-            throw new \Exception('Failed save file');
+            throw new \Exception('Failed save git ls-files');
         }
     }
 
-    public function analyzeSystems(array $phpUnitReport, $mutationReport): string {
-        // git ls-files, phpunit report, mutation testing report, patterns.json
+    public function analyzeSystems(array $phpUnitReport, $mutationReport, $iterate): string {
+        $this->logger->info('AIGenerator: Analyzing Systems...');
         $fileToAnalyze = [
             [
-                'path' => $this->getProjectStructure($this->projectDir),
+                'path' => $this->getProjectStructure($iterate),
                 'mime' => MimeType::TEXT_PLAIN,
                 'display' => 'git ls-config'
-            ],
-            [
-                'path' => $mutationReport,
-                'mime' => MimeType::TEXT_PLAIN,
-                'display' => 'Mutation testing Report'
             ],
             [
                 'path' => '/app/config/patterns.json',
                 'mime' => MimeType::TEXT_PLAIN,
                 'display' => 'path traversal patterns'
+            ],
+            [
+                'path' => $mutationReport,
+                'mime' => MimeType::TEXT_PLAIN,
+                'display' => 'Mutation testing Report'
             ],
         ];
 
@@ -94,6 +101,8 @@ class AiTestGenerator
         }
 
         $this->uploadFiles($fileToAnalyze);
+
+        $this->logger->info('AIGenerator: Generating Analyzer Results');
 
         $results = $this->client
             ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
@@ -136,13 +145,15 @@ class AiTestGenerator
         $payload = json_encode($fileToAnalyze, JSON_PRETTY_PRINT);
         $resultsJson = json_encode($results->json(), JSON_PRETTY_PRINT);
         
-        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR .'analyze-payload.json', $payload);
-        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR .'analyze-results.json', $resultsJson);
+        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "analyze-payload-$iterate.json", $payload);
+        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "analyze-results-$iterate.json", $resultsJson);
 
-        return $this->outputDir . DIRECTORY_SEPARATOR .'analyze-results.json';
+        return $this->outputDir . DIRECTORY_SEPARATOR . "analyze-results-$iterate.json";
     }
     
-    public function generateTestCase($analyzerResultPath): string {
+    public function generateTestCase($analyzerResultPath, $iterate): string {
+        $this->logger->info('AIGenerator: Preparet to Generating Test Case...');
+
         $analyzerResults = json_decode(FileHelper::readFile($analyzerResultPath), true);
         
         $fileToAnalyze = [];
@@ -170,6 +181,8 @@ class AiTestGenerator
         }
 
         $this->uploadFiles($fileToAnalyze);
+
+        $this->logger->info('AIGenerator: Generating Test Cases based on analyzer');
 
         $result = $this->client
             ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
@@ -203,13 +216,15 @@ class AiTestGenerator
             ]);
             
         $resultsJson = json_encode($result->json(), JSON_PRETTY_PRINT);
-        $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR .'generated-results.json';
+        $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate.json";
         file_put_contents($resultsPath, $resultsJson);
 
         return $resultsPath;
     }
 
     public function rewriteCode($generatedPath) : string {
+        $this->logger->info('AIGenerator: Rewriting Code with New Test Case');
+
         $generatedCode = json_decode(FileHelper::readFile($generatedPath), true);
 
         foreach ($generatedCode as $item) {

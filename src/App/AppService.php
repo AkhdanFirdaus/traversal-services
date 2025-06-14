@@ -51,45 +51,57 @@ class AppService
             $projectDir = $cloner->getTempDirectory();
 
             $outputDir = '/app/outputs' . DIRECTORY_SEPARATOR . basename($projectDir);
+            mkdir($outputDir, 0755, true);
 
             // Step 2: Initial PHP Unit Analysis and Infection Run
             $phpUnitRunner = new PhpUnitRunner(
                 $projectDir, 
                 'tests', 
                 $outputDir,
+                $this->logger,
             );
-
-            $unitResult = $phpUnitRunner->run();
-
+            
             $infectionRunner = new InfectionRunner(
                 $projectDir, 
                 'tests', 
+                $this->logger,
             );
-
+            
+            $unitResult = $phpUnitRunner->run();
             $initialMsi = $infectionRunner->run();
 
-            
+            file_put_contents($outputDir . DIRECTORY_SEPARATOR . 'msi-initial.json', json_encode($initialMsi, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
             // Step 3: Generate AI Test Cases
-            $generator = new AiTestGenerator($projectDir, $outputDir);
-            
-            $analyzerResultPath = $generator->analyzeSystems(
-                $phpUnitRunner->getReportsPath(),
-                $infectionRunner->getReportPath(),
+            $generator = new AiTestGenerator(
+                $projectDir, 
+                $outputDir, 
+                $this->logger,
             );
             
-            $generatedResultPath = $generator->generateTestCase(
-                $analyzerResultPath,
-            );
-            
-            $exportPath = $generator->rewriteCode($generatedResultPath);
-            
-            // Step 4: Final PHP Unit Analysis and Infection Run
-            $finalUnitResult = $phpUnitRunner->run();
-            $finalMsi = $infectionRunner->run();
-            
-            file_put_contents($outputDir . DIRECTORY_SEPARATOR . 'initial_msi.json', json_encode($initialMsi, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-            file_put_contents($outputDir . DIRECTORY_SEPARATOR . 'final_msi.json', json_encode($finalMsi, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-            
+            for ($i=1; $i <= 5; $i++) { 
+                $this->logger->info("Iteration-$i");
+
+                $analyzerResultPath = $generator->analyzeSystems(
+                    $phpUnitRunner->getReportsPath(),
+                    $infectionRunner->getReportPath(),
+                    $i,
+                );
+                
+                $generatedResultPath = $generator->generateTestCase(
+                    $analyzerResultPath,
+                    $i
+                );
+                
+                $exportPath = $generator->rewriteCode($generatedResultPath);
+                
+                // Step 4: Final PHP Unit Analysis and Infection Run
+                $unitRes = $phpUnitRunner->run();
+                $msiRes = $infectionRunner->run();
+                
+                file_put_contents($outputDir . DIRECTORY_SEPARATOR . "msi-$i.json", json_encode($msiRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            }
+
             // Step 5: Export Tests
             $exporter = new Exporter(
                 $this->logger, 
@@ -99,21 +111,6 @@ class AppService
             );
 
             $exporter->run();
-
-            // // Step 8: Generate Reports
-            // $reporter = new Reporter($this->logger, $this->notifier);
-            // $reports = $reporter->generateReports(
-            //     $analyzer->getProjectDir(),
-            //     $vulnerabilities,
-            //     $initialMsi,
-            //     $finalMsi,
-            //     $exportResult['exportDir'],
-            //     $isApi,
-            // );
-
-            // // // Step 9: Cleanup
-            // // $cleaner = new Cleaner($this->logger, $this->notifier);
-            // // $cleaner->cleanup($repoPath, $isApi);
 
             // // Return final results
             // $results = [
