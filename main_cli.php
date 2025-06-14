@@ -18,7 +18,7 @@ $socket = new SocketNotifier($logger);
 
 try {
     $app = new AppService($logger, $socket);
-    $results = $app->handleProcessRepo($repoUrl);
+    $results = $app->handleProcessRepo($repoUrl, uniqid());
 } catch (\Throwable $th) {
     echo $th->getMessage();
     echo "\n";

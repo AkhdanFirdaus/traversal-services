@@ -45,7 +45,7 @@ class InfectionRunner
     }
 
     public function getReportPath() : string {
-        return $this->projectDir . '/outputs/infection.log';
+        return $this->projectDir . '/outputs/infection-report.json';
     }
 
     private function parseResults(): mixed

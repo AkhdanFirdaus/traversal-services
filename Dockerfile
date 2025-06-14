@@ -32,8 +32,8 @@ COPY . .
 RUN composer dump-autoload --optimize
 
 # Create necessary directories with proper permissions
-RUN mkdir -p /app/tmp/ /app/logs/ /app/outputs/ 
-RUN chmod -R 777 /app/tmp /app/outputs /app/logs
+RUN mkdir -p /app/logs/ /app/outputs/ 
+RUN chmod -R 777 /app/logs /app/outputs
 
 # Set environment variables
 ENV APP_ENV=production

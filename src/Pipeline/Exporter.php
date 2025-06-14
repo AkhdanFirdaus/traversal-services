@@ -15,7 +15,7 @@ class Exporter
         private string $targetDir,
     ) {}
 
-    public function run(): array
+    public function run($iterate): array
     {
         // Grab all the files contained in $testDir
         $testFiles = glob($this->sourceDir . '/*.php');
@@ -25,7 +25,11 @@ class Exporter
         }
         
         // Create downloadable ZIP archive from the export directory
-        $zipPath = $this->createZipArchive($this->targetDir, $this->sourceDir, $testFiles);
+        // $repoName = basename($this->sourceDir);
+        // $timestamp = date('Y-m-d_H-i-s');
+        // $zipName = sprintf('generated_test_cases_%s_%s.zip', $repoName, $timestamp);
+        $zipName = sprintf('generated_test_cases_%s.zip', $iterate);
+        $zipPath = $this->createZipArchive($zipName, $this->targetDir, $testFiles);
 
         return [
             'exportDir' => $this->targetDir,
@@ -33,11 +37,8 @@ class Exporter
         ];
     }
 
-    private function createZipArchive(string $exportDir, string $repoPath, array $selectedTests): string
+    private function createZipArchive(string $zipName, string $exportDir, array $selectedTests): string
     {
-        $repoName = basename($repoPath);
-        $timestamp = date('Y-m-d_H-i-s');
-        $zipName = sprintf('generated_test_cases_%s_%s.zip', $repoName, $timestamp);
         $zipPath = $exportDir . DIRECTORY_SEPARATOR . $zipName;
         $zip = new ZipArchive();
 
@@ -47,7 +48,7 @@ class Exporter
 
         try {
             foreach ($selectedTests as $file) {
-                $zip->addFile($file, basename($file));
+                $zip->addFile($file, $file);
             }
 
             $zip->close();

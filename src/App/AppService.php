@@ -19,12 +19,9 @@ use Utils\FileHelper;
 
 class AppService
 {
-    private string $taskId;
-
     public function __construct(private Logger $logger, private SocketNotifier $notifier)
     {
         $this->loadEnvironment();
-        $this->taskId = uniqid('task_', true);
     }
 
     private function loadEnvironment(): void
@@ -39,15 +36,16 @@ class AppService
         }
     }
 
-    public function handleProcessRepo(string $repoUrl): array
+    public function handleProcessRepo(string $repoUrl, string $roomName): array
     {
         try {
             // Step 1: Clone Repository
-            $cloner = new RepositoryCloner($repoUrl);
-            $this->logger->info("Starting repository processing", ['repo' => $repoUrl, 'taskId' => $this->taskId]);
+            $this->logger->info("Starting repository processing", ['repo' => $repoUrl, 'taskId' => $roomName]);
             // $this->notifier->sendUpdate("Starting repository processing", 0);
-
+            
+            $cloner = new RepositoryCloner($repoUrl, $roomName);
             $cloner->run();
+
             $projectDir = $cloner->getTempDirectory();
 
             $outputDir = '/app/outputs' . DIRECTORY_SEPARATOR . basename($projectDir);
@@ -70,6 +68,7 @@ class AppService
             $unitResult = $phpUnitRunner->run();
             $initialMsi = $infectionRunner->run();
 
+            file_put_contents($outputDir . DIRECTORY_SEPARATOR . 'phpunit-initial.json', json_encode($unitResult, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
             file_put_contents($outputDir . DIRECTORY_SEPARATOR . 'msi-initial.json', json_encode($initialMsi, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
             // Step 3: Generate AI Test Cases
@@ -79,7 +78,7 @@ class AppService
                 $this->logger,
             );
             
-            for ($i=1; $i <= 5; $i++) { 
+            for ($i=1; $i <= 2; $i++) { 
                 $this->logger->info("Iteration-$i");
 
                 $analyzerResultPath = $generator->analyzeSystems(
@@ -95,22 +94,24 @@ class AppService
                 
                 $exportPath = $generator->rewriteCode($generatedResultPath);
                 
-                // Step 4: Final PHP Unit Analysis and Infection Run
+                // // Step 4: Final PHP Unit Analysis and Infection Run
                 $unitRes = $phpUnitRunner->run();
                 $msiRes = $infectionRunner->run();
                 
+                file_put_contents($outputDir . DIRECTORY_SEPARATOR . "phpunit-$i.json", json_encode($unitRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
                 file_put_contents($outputDir . DIRECTORY_SEPARATOR . "msi-$i.json", json_encode($msiRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                
+                // // Step 5: Export Tests
+                $exporter = new Exporter(
+                    $this->logger, 
+                    $this->notifier,
+                    $exportPath,
+                    $outputDir
+                );
+    
+                $exporter->run($i);
             }
 
-            // Step 5: Export Tests
-            $exporter = new Exporter(
-                $this->logger, 
-                $this->notifier,
-                $exportPath,
-                $outputDir
-            );
-
-            $exporter->run();
 
             // // Return final results
             // $results = [

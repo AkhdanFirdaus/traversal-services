@@ -35,16 +35,24 @@ try {
     // Get JSON body
     $input = json_decode(file_get_contents('php://input'), true);
     
-    if (!isset($input['repositoryUrl'])) {
+    if (!isset($input['gitUrl'])) {
         throw new \InvalidArgumentException('Repository URL is required');
     }
 
+    if (!isset($input['roomName'])) {
+        throw new \InvalidArgumentException('Room Name is required');
+    }
+
     $app = new AppService($logger, $socket);
-    $results = $app->handleProcessRepo($input['repositoryUrl'], true);
+    $results = $app->handleProcessRepo(
+        $input['gitUrl'],
+        $input['roomName'], 
+    );
 
     echo json_encode([
         'success' => true,
-        'data' => $results
+        'message' => 'Task Started',
+        // 'data' => $results
     ]);
 
 } catch (\InvalidArgumentException $e) {
