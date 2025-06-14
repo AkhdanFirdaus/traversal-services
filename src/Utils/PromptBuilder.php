@@ -44,7 +44,7 @@ EOT;
 This is the most important instruction. Your primary objective is to produce code that is 100% syntactically correct and immediately runnable.
 1. Zero Syntax Errors: The generated file must be free of any syntax or compile-time errors. Do not generate code that you suspect might fail.
 2. Complete and Self-Contained: The output must be a single, whole .php file. It must include the <?php tag, namespace declaration, all necessary use statements, the class definition, and all methods. Do not use placeholders or omit any part of the file.
-3. Passing Tests: All generated test cases must be logically sound and designed to pass in the target environment. If a test concept is likely to fail due to environment constraints, do not include it.
+3. 100% Passing Tests: All generated PHPUnit tests MUST pass successfully. This is a non-negotiable requirement. Do not generate any test case that is incomplete, logically flawed, or that you predict might fail in a standard PHPUnit environment. Every test must be designed to pass.
 
 # 1. Context Analysis
 You MUST meticulously analyze all provided inputs before writing any code. Your generated tests will be based entirely on this context.

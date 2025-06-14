@@ -108,6 +108,7 @@ class AiTestGenerator
             ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
             ->withGenerationConfig(
                 generationConfig: new GenerationConfig(
+                    temperature: 0.1,
                     responseMimeType: ResponseMimeType::APPLICATION_JSON,
                     responseSchema: new Schema(
                         type: DataType::ARRAY,
@@ -188,6 +189,7 @@ class AiTestGenerator
             ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
             ->withGenerationConfig(
                 generationConfig: new GenerationConfig(
+                    temperature: 0.1,
                     responseMimeType: ResponseMimeType::APPLICATION_JSON,
                     responseSchema: new Schema(
                         type: DataType::ARRAY,
