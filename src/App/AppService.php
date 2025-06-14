@@ -15,6 +15,7 @@ use Utils\SocketNotifier;
 use Dotenv\Dotenv;
 use Pipeline\Analyzer;
 use Pipeline\PhpUnitRunner;
+use Utils\FileHelper;
 
 class AppService
 {
@@ -49,52 +50,55 @@ class AppService
             $cloner->run();
             $projectDir = $cloner->getTempDirectory();
 
-            // Step 2: PHP Unit Analysis
+            $outputDir = '/app/outputs' . DIRECTORY_SEPARATOR . basename($projectDir);
+
+            // Step 2: Initial PHP Unit Analysis and Infection Run
             $phpUnitRunner = new PhpUnitRunner(
                 $projectDir, 
                 'tests', 
-                'outputs',
+                $outputDir,
             );
+
             $unitResult = $phpUnitRunner->run();
 
-            // Step 3: Initial Infection Run
             $infectionRunner = new InfectionRunner(
                 $projectDir, 
                 'tests', 
-                'outputs',
             );
+
             $initialMsi = $infectionRunner->run();
 
-            // Step 4: Generate AI Test Cases
-            // $generator = new AiTestGenerator($projectDir);
-            // $generator->analyzeSystems(
-            //     $projectDir . DIRECTORY_SEPARATOR . 'phpunit.xml', 
-            //     $projectDir . DIRECTORY_SEPARATOR . 'outputs' . DIRECTORY_SEPARATOR .'infection-report.json'
-            // );
-            // $testCases = $generator->generate($vulnerabilities, $initialMsi['escapedMutants']);
+            
+            // Step 3: Generate AI Test Cases
+            $generator = new AiTestGenerator($projectDir, $outputDir);
+            
+            $analyzerResultPath = $generator->analyzeSystems(
+                $phpUnitRunner->getReportsPath(),
+                $infectionRunner->getReportPath(),
+            );
+            
+            $generatedResultPath = $generator->generateTestCase(
+                $analyzerResultPath,
+            );
+            
+            $exportPath = $generator->rewriteCode($generatedResultPath);
+            
+            // Step 4: Final PHP Unit Analysis and Infection Run
+            $finalUnitResult = $phpUnitRunner->run();
+            $finalMsi = $infectionRunner->run();
+            
+            file_put_contents($outputDir . DIRECTORY_SEPARATOR . 'initial_msi.json', json_encode($initialMsi, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            file_put_contents($outputDir . DIRECTORY_SEPARATOR . 'final_msi.json', json_encode($finalMsi, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            
+            // Step 5: Export Tests
+            $exporter = new Exporter(
+                $this->logger, 
+                $this->notifier,
+                $exportPath,
+                $outputDir
+            );
 
-            // // Step 5: Select and Export Tests
-            // $selector = new TestSelector($this->logger);
-            // $selectedTests = $selector->select($testCases);
-            
-            // // Step 6: Final Infection Run
-            // $infectionRunner->copyTestsToRepo($testCases);
-            // $infectionRunner->setFinalRunner(true);
-            // $finalMsi = $infectionRunner->run();
-            
-            // // Step 7: Export Tests
-            // $exporter = new Exporter(
-            //     $this->logger, 
-            //     $this->notifier,
-            //     $analyzer->getProjectDir(), 
-            //     $analyzer->getDetectedTestDir(),
-            // );
-            
-            // $exportResult = $exporter->export(
-            //     $analyzer->getProjectDir(), 
-            //     $analyzer->getDetectedTestDir(), 
-            //     $isApi,
-            // );
+            $exporter->run();
 
             // // Step 8: Generate Reports
             // $reporter = new Reporter($this->logger, $this->notifier);

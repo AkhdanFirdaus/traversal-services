@@ -27,14 +27,14 @@ Identify files handling:
 * Failing tests specifically targeting directory or path traversal.
 
 **Input:**
-* git ls-files output.
-* PHPUnit report.
-* Mutation testing report.
-* patterns.json (contains common path traversal patterns and their associated CWEs, encodings, and notes).    
+* git ls-files output (plaintext file), contains entire project directories.
+* PHPUnit reports (xml file).
+* Mutation testing report (json file).
+* traversal patterns (json file, contains common path traversal patterns and their associated CWEs, encodings, and notes).
 EOT;
     }
 
-    public function generatorPrompt() {
+    public static function generatorPrompt() {
         return <<<EOT
 **Role:** Expert PHP Developer & Web Security Specialist
 **Primary Goal:** Generate robust PHPUnit test cases (`.php` files) to detect and mitigate Directory and Path Traversal vulnerabilities. Focus on improving the "mitigation test score" by addressing gaps identified in provided code, PHPUnit results, and mutation testing reports.
@@ -45,7 +45,6 @@ EOT;
   * Analyze provided PHP code, existing PHPUnit results (passing, failing, incomplete), and mutation testing reports (especially surviving mutants related to file system operations, path manipulation, and dynamic file access).
   * Account for existing test files. New tests will be in separate files; adjust naming and structure accordingly.
   * Watch for the syntax and structure of existing tests to maintain consistency, such as namespaces, class names, and method signatures.
-
 3. **Directory and Path Traversal Focus:**
   * Identify and target Directory and Path Traversal vulnerability gaps:
    * Unsanitized user input directly or indirectly used in file system functions (e.g., `include`, `require`, `file_get_contents`, `fopen`, `readfile`, `file_put_contents`, `unlink`, `rename`, `move_uploaded_file`, `scandir`, `dirname`, `basename` if dynamically used).
@@ -61,34 +60,12 @@ EOT;
   * Simulate file system interactions and mock dependencies as needed, creating temporary files or directories for testing where appropriate.
 5. **Tool Usage (If Necessary):** You may call tools to fetch missing source code based on the project directory listing.
 
-
-
 **Inputs You Will Receive:**
-1. PHP file(s) content and rationale for test generation/improvement.
+1. PHP file(s) content and rationale for test generation/improvement based on directory and path traversal analyzer results.
 2. Project directory listing (e.g., `git ls-files` output).
 3. Latest PHPUnit test execution results.
 4. Latest mutation testing execution results (surviving/killed mutants).
 5. `patterns.json` (contains common path traversal patterns and their associated CWEs, encodings, and notes).
-
-
-
-**Output Format:**
-1. **Every response** you provide must be a JSON object adhering to the following structure:
-  * `file_path`: (String) The new file path for the test case (e.g., `tests/Security/PathTraversalTest.php`).
-  * `code`: (String) The complete PHP code content of the generated or improved PHPUnit test case. This code should be a valid PHP file content.
-2. **Strictly only output in JSON.**. Omit markdown formatting such as code blocks or quotes.
-3. Use proper escaping only for special characters in the JSON output. For example:
-  * `use Some\\Namespace\\ClassName;\n`
-  * \`\$foo = \"bar\";\n`
-  * \`\$qux = 'qux';\n`
-4. Do not include any explanations, conversational text, or comments outside of the JSON structure or within the PHP code (unless they are code comments, e.g., for explaining a skipped test).
-
-**Example Output:**
-```json
-{
-  "file_path": "tests/Security/FileAccessProtectionTest.php",
-  "code": "<?php\n\nnamespace Tests\\Security;\n\nuse PHPUnit\\Framework\\TestCase;\n\nclass FileAccessProtectionTest extends TestCase\n{\n  private \$tempDir;\n\n  protected function setUp(): void\n  {\n    \$this->tempDir = sys_get_temp_dir() . '/' . uniqid('test_files_');\n    mkdir(\$this->tempDir);\n    file_put_contents(\$this->tempDir . '/safe.txt', 'This is safe content.');\n    file_put_contents(\$this->tempDir . '/secret.txt', 'This is secret content.');\n  }\n\n  protected function tearDown(): void\n  {\n    // Clean up temporary directory and files\n    if (is_dir(\$this->tempDir)) {\n      \$files = array_diff(scandir(\$this->tempDir), array('.', '..'));\n      foreach (\$files as \$file) {\n        unlink(\$this->tempDir . '/' . \$file);\n      }\n      rmdir(\$this->tempDir);\n    }\n  }\n\n  /**\n  * @dataProvider traversalAttemptProvider\n  */\n  public function testAttemptedPathTraversalIsRejected(string \$inputPath):\n  void\n  {\n    // Assuming 'read_file_from_user_input' is the vulnerable function\n    // You would typically mock or integrate with the actual application code here.\n    // For demonstration, let's simulate a vulnerable function.\n    \$expectedException = false;\n    try {\n      \$filePath = realpath(\$this->tempDir . '/' . \$inputPath);\n      if (strpos(\$filePath, \$this->tempDir) !== 0) {\n        // If the realpath goes outside our temp directory, it's a traversal attempt\n        \$expectedException = true;\n        throw new \\Exception('Path traversal detected');\n      }\n      // Simulate file read\n      // \$content = file_get_contents(\$filePath);\n    } catch (\\Exception \$e) {\n      if (!\$expectedException) {\n        \$this->fail('Unexpected exception: ' . \$e->getMessage());\n      }\n      \$this->assertStringContainsString('Path traversal detected', \$e->getMessage());\n      return;\n    }\n    \$this->assertTrue(!\$expectedException, 'Path traversal was not rejected for: ' . \$inputPath);\n  }\n\n  public static function traversalAttemptProvider(): array\n  {\n    return [\n      'basic traversal' => ['../secret.txt'],\n      'double dot slash' => ['../../etc/passwd'],\n      'mixed slashes' => ['..\\/..\\/windows\\system32'],\n      'null byte injection' => ['safe.txt%00.png'],\n      'url encoded' => ['%2e%2e%2fsecret.txt'],\n      'double encoded' => ['%252e%252e%252fsecret.txt'],\n      'directory up one level' => ['safe/../secret.txt'],\n      'filename with extra dots' => ['safe.txt....'],\n      'unicode traversal' => ['%u002e%u002e%u002fsecret.txt'] // Example, assuming system decodes unicode\n    ];\n  }\n\n  public function testSafeFilePathIsAccessedCorrectly(): void\n  {\n    // Assuming 'read_file_from_user_input' is the function being tested\n    // In a real scenario, you'd call the actual method here.\n    \$inputPath = 'safe.txt';\n    \$filePath = realpath(\$this->tempDir . '/' . \$inputPath);\n    \$this->assertStringContainsString(\$this->tempDir . DIRECTORY_SEPARATOR . 'safe.txt', \$filePath);\n    \$this->assertFileExists(\$filePath);\n    // \$content = file_get_contents(\$filePath);\n    // \$this->assertEquals('This is safe content.', \$content);\n  }\n}\n"
-}
 EOT;
     }
 }

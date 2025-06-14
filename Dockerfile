@@ -1,5 +1,7 @@
 FROM php:8.2-cli
 
+ENV TZ=Asia/Jakarta
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \

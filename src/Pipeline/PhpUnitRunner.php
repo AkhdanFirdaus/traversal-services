@@ -13,7 +13,7 @@ class PhpUnitRunner {
     private Logger $logger;
 
     public function __construct(private string $projectDir, private string $testDir, private string $outputDir) {
-        $phpUnitConfig = new ConfigPHPUnit($projectDir, $testDir, $outputDir);
+        $phpUnitConfig = new ConfigPHPUnit($projectDir, $testDir, 'outputs');
         $phpUnitConfig->write();
         $this->configPath = $phpUnitConfig->getConfigPath();
         $this->logger = new Logger();
@@ -21,11 +21,11 @@ class PhpUnitRunner {
 
     public function run(): mixed {
         $process = new Process([
-            '/app/vendor/bin/phpunit', 
+            'vendor/bin/phpunit', 
             '--coverage-xml', 
-            $this->outputDir, 
+            'outputs', 
             '--log-junit', 
-            $this->outputDir . DIRECTORY_SEPARATOR . 'junit.xml',
+            'outputs/junit.xml',
             '--coverage-filter',
             'src'
         ], $this->projectDir);
@@ -40,8 +40,18 @@ class PhpUnitRunner {
         $this->logger->info('Success run phpunit');
 
         return [
-            'coverage' => FileHelper::readFile($this->projectDir . DIRECTORY_SEPARATOR . $this->outputDir . DIRECTORY_SEPARATOR . 'index.xml'),
-            'junit' => FileHelper::readFile($this->projectDir . DIRECTORY_SEPARATOR . $this->outputDir . DIRECTORY_SEPARATOR . 'junit.xml'),
+            'coverage' => FileHelper::readFile($this->projectDir . '/outputs/index.xml'),
+            'junit' => FileHelper::readFile($this->projectDir . '/outputs/junit.xml'),
         ];
+    }
+
+    public function getReportsPath(): array {
+        $directory = $this-> projectDir . DIRECTORY_SEPARATOR . 'outputs';
+
+        $files = array_filter(scandir($directory), function ($file) use ($directory) {
+            return is_file("$directory/$file") && pathinfo($file, PATHINFO_EXTENSION) === 'xml';
+        });
+
+        return array_map(fn($file) => "$this->projectDir/outputs/$file", array_values($files));
     }
 }

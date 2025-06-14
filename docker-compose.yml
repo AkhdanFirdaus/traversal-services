@@ -6,7 +6,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - .:/app
+      - ./src:/app/src
       - ./logs:/app/logs
       - ./outputs:/app/outputs
       - ./tmp:/tmp
