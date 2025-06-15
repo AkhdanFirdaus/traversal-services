@@ -79,28 +79,26 @@ class AppService
                 $this->logger,
             );
             
-            $projectStructure = FileHelper::getProjectStructure($this->logger, $projectDir, $outputDir, 'initial');
-            $analizeSystem = $generator->analyzeSystems(
-                $projectStructure['path'],
-                $phpUnitRunner->getReportsPath(),
-                $infectionRunner->getReportPath(),
-            );
-
             $this->logger->info('AIGenerator: Preparing to Generate Test Case using Function Calling...');
             
             $unitResults = $initialUnit;
-            $mutation_report = $initialMsi;
+            $mutationReport = $initialMsi;
             
             for ($i=1; $i <= 5; $i++) { 
                 try {
                     $this->logger->info("Iteration-$i");
-                    
-                    $projectStructure = FileHelper::getProjectStructure($this->logger, $projectDir, $outputDir, 'initial');
-                    $generatedResult = $generator->generateTestCase(
-                        $analizeSystem['analyze_results'],
-                        $projectStructure['content'],
+
+                    $projectStructure = FileHelper::getProjectStructure($this->logger, $projectDir, $outputDir, $i);
+
+                    $analizeSystem = $generator->analyzeSystems(
+                        $projectStructure,
                         $unitResults,
-                        $mutation_report,
+                        $mutationReport,
+                        $i
+                    );
+                    
+                    $generatedResult = $generator->generateTestCase(
+                        $analizeSystem,
                         $i
                     );
                     
@@ -113,7 +111,7 @@ class AppService
                     $infectionRunner->saveReport("msi-$i.json");
 
                     $unitResults = $unitRes;
-                    $mutation_report = $msiRes;
+                    $mutationReport = $msiRes;
                     
                 } catch (\Throwable $th) {
                     $this->logger->error("Iteration-$i failed to generate", [

@@ -118,7 +118,7 @@ class FileHelper
         return true;
     }
 
-    public static function getProjectStructure(Logger $logger, string $projectDir, string $outputDir, $iterate): mixed {
+    public static function getProjectStructure(Logger $logger, string $projectDir, string $outputDir, $iterate): string {
         $logger->info('AIGenerator: Listing Project Structure using `git ls-files`');
 
         $process = new Process(['git', 'ls-files'], $projectDir);
@@ -131,10 +131,7 @@ class FileHelper
         $target = $outputDir . DIRECTORY_SEPARATOR . "git-lsfiles-output-$iterate.txt";
         $content = $process->getOutput();
         if (file_put_contents($target, $content)) {
-            return [
-                'path' => $target,
-                'content' => $content,
-            ];
+            return $content;
         } else {
             throw new \Exception('Failed save git ls-files');
         }

@@ -9,6 +9,7 @@ use Utils\ConfigInfection;
 use Utils\IStats;
 use Utils\Logger;
 use Utils\PHPUnitConfig;
+use Utils\ReportParser;
 use Utils\SocketNotifier;
 
 class InfectionRunner
@@ -53,8 +54,7 @@ class InfectionRunner
 
     public function saveReport($filename): void
     {
-        $report = json_decode($this->content, true)['stats'];
-
-        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . $filename, json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $report = ReportParser::generateMutationSummary($this->content, $this->projectDir);
+        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . $filename, $report);
     }
 } 

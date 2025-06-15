@@ -12,155 +12,22 @@ use Gemini\Data\GenerationConfig;
 use Gemini\Data\Part;
 use Gemini\Data\Schema;
 use Gemini\Data\Tool;
-use Gemini\Data\UploadedFile;
 use Gemini\Enums\DataType;
-use Gemini\Enums\MimeType;
-use Gemini\Enums\ResponseMimeType;
 use Gemini\Enums\Role;
-use Symfony\Component\Process\Exception\ProcessFailedException;
-use Symfony\Component\Process\Process;
 use Utils\FileHelper;
+use Utils\JsonCleaner;
 use Utils\Logger;
 use Utils\PromptBuilder;
 
 class AiTestGenerator
 {
     private Client $client;
-    private array $uploadedFiles = [];
 
     public function __construct(private string $projectDir, private string $outputDir, private Logger $logger) {
         $this->client = Gemini::client($_ENV['GEMINI_API_KEY']);
     }
 
-    private function uploadFiles(array $files) : void {
-        $this->logger->info('AIGenerator: Uploading Files', [
-            'files' => array_map(fn ($item) => $item['path'], $files),
-        ]);
-
-        foreach ($files as $file) {
-            $meta = $this->client->files()->upload(
-                filename: $file['path'],
-                mimeType: $file['mime'],
-                displayName: basename($file['path']),
-            );
-
-            do {
-                sleep(2);
-                $meta = $this->client->files()->metadataGet($meta->uri);
-            } while (!$meta->state->complete());
-    
-            if ($meta->state === \Gemini\Enums\FileState::Failed) {
-                throw new \Exception('Failed upload files: \n' . json_encode($meta->toArray(), JSON_PRETTY_PRINT));
-            }
-
-            $this->uploadedFiles[] = new UploadedFile(
-                fileUri: $meta->uri,
-                mimeType: $file['mime'],
-            );
-        }
-
-    }
-
-    
-
-    public function analyzeSystems(string $projectStructurePath, array $phpUnitReport, $mutationReport): mixed {
-        $this->logger->info('AIGenerator: Analyzing Systems...');
-        $fileToAnalyze = [
-            [
-                'path' => $projectStructurePath,
-                'mime' => MimeType::TEXT_PLAIN,
-                'display' => 'git ls-config'
-            ],
-            [
-                'path' => '/app/config/patterns.json',
-                'mime' => MimeType::TEXT_PLAIN,
-                'display' => 'path traversal patterns'
-            ],
-            [
-                'path' => $mutationReport,
-                'mime' => MimeType::TEXT_PLAIN,
-                'display' => 'Mutation testing Report'
-            ],
-        ];
-
-        foreach ($phpUnitReport as $report) {
-            $fileToAnalyze[] = [
-                'path' => $report,
-                'mime' => MimeType::TEXT_XML,
-                'display' => 'PHP Unit Report',
-            ];
-        }
-
-        $this->uploadFiles($fileToAnalyze);
-
-        $this->logger->info('AIGenerator: Generating Analyzer Results');
-
-        $results = $this->client
-            ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
-            ->withGenerationConfig(
-                generationConfig: new GenerationConfig(
-                    temperature: 0.1,
-                    responseMimeType: ResponseMimeType::APPLICATION_JSON,
-                    responseSchema: new Schema(
-                        type: DataType::ARRAY,
-                        items: new Schema(
-                            type: DataType::OBJECT,
-                            properties: [
-                                'file' => new Schema(
-                                    type: DataType::STRING,
-                                    description: 'Path to the PHP file',
-                                    example: "src/controllers/FileController.php",
-                                ),
-                                'reason' => new Schema(
-                                    type: DataType::STRING,
-                                    description: 'Concise reason for selection related to directory/path traversal (e.g., "Uses user input in include without sanitization.", "Low mutation score in path validation for file upload.", "Handles dynamic file download based on user input.")',
-                                    example: "Handles dynamic file access via `file_get_contents` with unsanitized user input.",
-                                ),
-                                'related_test_files' => new Schema(
-                                    type: DataType::ARRAY,
-                                    description: 'List of related test files already present.',
-                                    items: new Schema(
-                                        type: DataType::STRING,
-                                        example: "tests/FileControllerTest.php",
-                                    ),
-                                ),
-                            ],
-                            required: ['file', 'reason', 'related_test_files']
-                        )
-                    )
-                )
-            )->generateContent([
-                ...$this->uploadedFiles,
-                PromptBuilder::analyzeSystem(),
-            ]);
-
-        $payload = json_encode($fileToAnalyze, JSON_PRETTY_PRINT);
-        $resultsJson = json_encode($results->json(), JSON_PRETTY_PRINT);
-        
-        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "analyze-payload.json", $payload);
-        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "analyze-results.json", $resultsJson);
-
-        return [
-            'analyze_results' => FileHelper::readFile($this->outputDir . DIRECTORY_SEPARATOR . "analyze-results.json"),
-            'project_structure' => FileHelper::readFile($fileToAnalyze[0]['path']),
-            'mutation_report' => FileHelper::readFile($fileToAnalyze[2]['path']),
-        ];
-    }
-    
-    private function executeGetFileContent(string $filePath): string {
-        $fullPath = $this->projectDir . DIRECTORY_SEPARATOR . $filePath;
-
-        $this->logger->info('Function Call: Reading file', ['path' => $fullPath]);
-
-        try {
-            $content = FileHelper::readFile($fullPath);
-            return "--- Content of {$filePath} ---\n{$content}\n--- End Content ---";
-        } catch (\Throwable $th) {
-            return "Error reading file {$filePath}: {$th->getMessage()}";
-        }
-    }
-
-    private function getGenerationConfig(): GenerationConfig {
+     private function getGenerationConfig(): GenerationConfig {
         return new GenerationConfig(temperature: 0.1);
     }
 
@@ -169,13 +36,13 @@ class AiTestGenerator
             functionDeclarations: [
                 new FunctionDeclaration(
                     name: 'get_file_content',
-                    description: "Retrieves file content from the project directory",
+                    description: "Retrieves the full content of a specific file from the project. Use this to read project structure, reports, or source code.",
                     parameters: new Schema(
                         type: DataType::OBJECT,
                         properties: [
                             'file_path' => new Schema(
                                 type: DataType::STRING,
-                                description: 'Relative path to the source code file from the project root'
+                                description: 'The absolute path to the file on disk.'
                             ),
                         ],
                         required: ['file_path']
@@ -185,7 +52,28 @@ class AiTestGenerator
         );
     }
 
-    private function handleFunctionCall(FunctionCall $functionCall): Content {
+    /**
+     * Executes the file read operation requested by the model.
+     */
+    private function executeGetFileContent(string $filePath): string
+    {
+        // Simple security check to ensure we stay within the project
+        if (strpos(realpath($filePath), realpath($this->projectDir)) !== 0 && $filePath !== '/app/config/patterns.json') {
+             return "Error: Access denied. Cannot read files outside of the project directory.";
+        }
+        
+        $this->logger->info('Function Call: Reading file', ['path' => $filePath]);
+
+        try {
+            $content = FileHelper::readFile($filePath);
+            return "--- Content of " . basename($filePath) . " ---\n{$content}\n--- End Content ---";
+        } catch (\Throwable $th) {
+            return "Error reading file {$filePath}: {$th->getMessage()}";
+        }
+    }
+    
+    private function handleFunctionCall(FunctionCall $functionCall): Content
+    {
         if ($functionCall->name === 'get_file_content') {
             $filePath = $functionCall->args['file_path'];
             $result = $this->executeGetFileContent($filePath);
@@ -199,104 +87,113 @@ class AiTestGenerator
                         )
                     )
                 ],
-                role: Role::MODEL,
+                role: Role::MODEL
             );
         }
 
         return new Content(
-            parts: [
-                new Part(
-                    functionResponse: new FunctionResponse(
-                        name: $functionCall->name,
-                        response: ['error' => 'Unknown function called.']
-                    )
-                )
-            ],
-            role: Role::MODEL,
+            parts: [ new Part( functionResponse: new FunctionResponse(name: $functionCall->name, response: ['error' => 'Unknown function called.']) ) ],
+            role: Role::MODEL
         );
     }
 
-    public function generateTestCase(
-        string $analyzerResults,
-        string $projectStructure,
-        array $unitResults,
-        string $mutationReport,
-        $iterate
-    ): string {
-        $this->logger->info('AIGenerator: Generating Test Cases with multi-turn conversation');
-        
-        $buildUnitContext = [];
+    /**
+     * PHASE 1: Analyzes the system using function calling to identify vulnerable files.
+     */
+    public function analyzeSystems(string $projectStructure, array $phpUnitReport, string $mutationReport, $iterate): array {
+        $this->logger->info('AIGenerator: [Phase 1] Analyzing Systems using Function Calling...');
 
-        foreach ($unitResults as $key => $value) {
-            $buildUnitContext[] = Content::parse(
-                part: "Unit Test Report for $key: \n$value",
-                role: Role::USER,
-            );
+        // Create a list of available file paths for the model to choose from.
+        $availableFilesContext = "The following files are available for analysis. Use the `get_file_content` tool to read them.\n\n";
+        $availableFilesContext .= "- Project Structure: $projectStructure\n";
+        $availableFilesContext .= "- Path Traversal Patterns: /app/config/patterns.json\n";
+        $availableFilesContext .= "- Mutation Report: $mutationReport\n";
+        
+        foreach ($phpUnitReport as $reportPath) {
+            $availableFilesContext .= "- PHPUnit Report: $reportPath\n";
         }
 
         $chat = $this->client
             ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
-            ->withGenerationConfig(generationConfig: $this->getGenerationConfig())
+            ->withGenerationConfig($this->getGenerationConfig())
             ->withTool($this->getFileContentTool())
             ->startChat(history: [
-                // sebagai konteks
-                Content::parse(
-                    part: "Project Directory Structure:\n$projectStructure",
-                    role: Role::USER,
-                ),
-                ...$buildUnitContext,
-                Content::parse(
-                    part: "Mutation Report:\n$mutationReport",
-                    role: Role::USER,
-                ),
-                Content::parse(
-                    part: "Analysis Results:\n$analyzerResults",
-                    role: Role::MODEL,
-                ),
+                Content::parse(part: $availableFilesContext, role: Role::USER),
             ]);
 
-        $response = $chat->sendMessage(PromptBuilder::generatorPrompt());
+        $response = $chat->sendMessage(PromptBuilder::analyzeSystem());
 
         while ($response->parts()[0]->functionCall !== null) {
             $functionCall = $response->parts()[0]->functionCall;
-
-            $this->logger->info('AIGenerator: Model requested function call.', [
-                'name' => $functionCall->name,
-                'args' => $functionCall->args,
-            ]);
-            
+            $this->logger->info('AIGenerator: [Phase 1] Model requested function call.', ['name' => $functionCall->name, 'args' => $functionCall->args]);
             $functionResponseContent = $this->handleFunctionCall($functionCall);
             $response = $chat->sendMessage($functionResponseContent);
         }
 
-        $this->logger->info('AIGenerator: Received final response from the model.');
+        $this->logger->info('AIGenerator: [Phase 1] Received final analysis from the model.');
+        
+        $analysisJson = $response->text();
+        $analysisJson = JsonCleaner::parse($analysisJson);
+        
+        $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR . "analyze-results-$iterate.json";
+        file_put_contents($resultsPath, json_encode($analysisJson, JSON_PRETTY_PRINT));
 
-        $finalResponseJson = substr($response->text(), 7, -3);
-        $finalResponseJson = preg_replace('/^json\\n|$/m', '', trim($finalResponseJson));
+        return $analysisJson;
+    }
+    
+    /**
+     * PHASE 2: Generates the test case based on the analysis.
+     */
+    public function generateTestCase(array $analyzerResults, $iterate): array {
+        $this->logger->info('AIGenerator: [Phase 2] Generating Test Case with multi-turn conversation');
+
+        $analyzerResultsJson = json_encode($analyzerResults, JSON_PRETTY_PRINT);
+        
+        $chat = $this->client
+            ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
+            ->withGenerationConfig($this->getGenerationConfig())
+            ->withTool($this->getFileContentTool())
+            ->startChat();
+        
+        $finalPrompt = PromptBuilder::generatorPrompt() . "\n\n# Analysis to Address:\n" . $analyzerResultsJson;;
+        $response = $chat->sendMessage($finalPrompt);
+
+        while ($response->parts()[0]->functionCall !== null) {
+            $functionCall = $response->parts()[0]->functionCall;
+            $this->logger->info('AIGenerator: [Phase 2] Model requested function call.', ['name' => $functionCall->name, 'args' => $functionCall->args]);
+            $functionResponseContent = $this->handleFunctionCall($functionCall);
+            $response = $chat->sendMessage($functionResponseContent);
+        }
+
+        $this->logger->info('AIGenerator: [Phase 2] Received final test case from the model.');
+
+        $finalResponseJson = $response->text();
+        $finalResponseJson = JsonCleaner::parse($finalResponseJson);
 
         $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate.json";
-        file_put_contents($resultsPath, $finalResponseJson);
+        file_put_contents($resultsPath, json_encode($finalResponseJson, JSON_PRETTY_PRINT));
 
         return $finalResponseJson;
     }
 
-    public function rewriteCode($generated) : string {
+    public function rewriteCode(array $generated) : string {
         try {
             $this->logger->info('AIGenerator: Rewriting Code with New Test Case');
 
-            $generatedCode = json_decode($generated, true);
+            if (!isset($generated['file_path']) || !isset($generated['code'])) {
+                 throw new \Exception("Generated JSON is invalid. Missing 'file_path' or 'code' key.");
+            }
 
-            $dest = $generatedCode['file_path'];
+            $dest = $generated['file_path'];
             file_put_contents(
-                $this->projectDir . DIRECTORY_SEPARATOR . $dest, 
-                $generatedCode['code'],
+                $this->projectDir . DIRECTORY_SEPARATOR . $dest,
+                $generated['code']
             );
 
             return $this->projectDir . DIRECTORY_SEPARATOR . 'tests';
 
         } catch (\Throwable $th) {
-            $this->logger->error('Failed Rewrite File', [
-                'stack' => $th->getTrace(),
+            $this->logger->error('Failed to rewrite file', [
                 'error' => $th->getMessage(),
             ]);
             throw $th;
