@@ -3,17 +3,12 @@
 namespace App;
 
 use Pipeline\RepositoryCloner;
-use Pipeline\HeuristicAnalyzer;
 use Pipeline\InfectionRunner;
 use Pipeline\AiTestGenerator;
-use Pipeline\TestSelector;
 use Pipeline\Exporter;
-use Pipeline\Reporter;
-use Pipeline\Cleaner;
 use Utils\Logger;
 use Utils\SocketNotifier;
 use Dotenv\Dotenv;
-use Pipeline\Analyzer;
 use Pipeline\PhpUnitRunner;
 use Utils\FileHelper;
 
@@ -84,7 +79,7 @@ class AppService
             $unitResults = $initialUnit;
             $mutationReport = $initialMsi;
             
-            for ($i=1; $i <= 5; $i++) { 
+            for ($i=1; $i <= 20; $i++) { 
                 try {
                     $this->logger->info("Iteration-$i");
 
@@ -104,7 +99,9 @@ class AppService
                     
                     $exportPath = $generator->rewriteCode($generatedResult);
 
-                    $unitRes = $phpUnitRunner->run();
+                    $unitRes = $phpUnitRunner->run([
+                        "--process-isolation",
+                    ]);
                     $phpUnitRunner->saveReport("phpunit-$i.json");
                     
                     $msiRes = $infectionRunner->run();

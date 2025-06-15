@@ -18,16 +18,11 @@ class PhpUnitRunner {
         $this->configPath = $phpUnitConfig->getConfigPath();
     }
 
-    public function run(): mixed {
+    public function run($additionalcommands = ['--coverage-xml', 'outputs', '--log-junit', 'outputs/junit.xml', '--coverage-filter', 'src',]): mixed {
         try {
             $process = new Process([
                 'vendor/bin/phpunit', 
-                '--coverage-xml', 
-                'outputs', 
-                '--log-junit', 
-                'outputs/junit.xml',
-                '--coverage-filter',
-                'src'
+                ...$additionalcommands,
             ], $this->projectDir);
             
             $process->run();

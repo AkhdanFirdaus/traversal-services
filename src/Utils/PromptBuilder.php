@@ -64,47 +64,38 @@ EOT;
     {
         // This prompt has been heavily revised to prevent runtime and logical errors.
          return <<<EOT
-# ROLE: Expert PHPUnit Test Automation Engineer
+# ROLE: Expert PHPUnit Test Automation Engineer & Security Developer
 
-# GOAL: Generate a SINGLE, syntactically flawless, and LOGICALLY CORRECT PHPUnit test file that PASSES on the first run.
-
----
-# CRITICAL MANDATE: HOW TO WRITE A TEST THAT ACTUALLY PASSES
-All previous generated tests failed because of logical runtime errors. You MUST follow these rules to prevent them. This is more important than anything else.
-
-### 1. ENVIRONMENT CONTROL IS THE TOP PRIORITY
-This is the main reason tests fail. The code being tested (e.g., `VulnFileRead`) often looks for a hardcoded directory (e.g., `../vulnerable_files`), but the test creates files in a separate temporary directory. You MUST bridge this gap.
-- **Step 1: Analyze the Constructor.** After reading the source code, check the `__construct` method of the class you are testing.
-- **Step 2: Choose Your Strategy.**
-  - **Strategy A (Preferred): Dependency Injection.** If the constructor accepts a base path (e.g., `__construct(string \$baseDir)`), you MUST use it. In your test, instantiate the class with the path to your temporary directory from `setUp()` (e.g., `new TheClassUnderTest(\$this->tempDir)`).
-  - **Strategy B: Mirror the Directory.** If the constructor does NOT accept a path, the class's directory is hardcoded. In this case, you MUST create a directory structure inside your `setUp()` temporary directory that **exactly mirrors** what the application expects. For example, if the code accesses `../vulnerable_files/users/`, your `setUp()` method MUST create `\$this->tempDir . '/vulnerable_files/users/'`.
-
-### 2. The Test Lifecycle MUST Be Respected
-A PHPUnit test runs in a strict order. You MUST write code that follows this lifecycle.
-  1. `public static function dataProvider()` runs FIRST. It is STATIC and has NO access to `\$this`.
-  2. `setUp()` runs before EACH test method. This is where you CREATE the test environment (temp directory and files).
-  3. **Initialize ALL typed properties** inside `setUp()`. If you declare `private string \$safeFilePath;`, you MUST assign it a value here to prevent "uninitialized property" errors.
-  4. `testSomething()` runs. This is where you execute the code and assert the results.
-  5. `tearDown()` runs after EACH test method. This is where you DESTROY the test environment (recursively delete the temp directory).
-
-### 3. DATA PROVIDERS ARE STATIC AND SIMPLE
-- They MUST be `public static function`.
-- They **CANNOT** reference `\$this`. They run before `setUp()`.
-- They must return a simple, hardcoded array of literal string values (e.g., `['../some/path']`). The test method is responsible for combining this payload with the base path from `\$this->tempDir`.
-
-### 4. ASSERTIONS MUST MATCH REALITY
-- **Analyze the method signature first!**
-- If a function can return `false`, your failure test **MUST** be `\$this->assertFalse(\$result);`.
-- If a function returns a specific error string like `'Access denied'`, your test **MUST** be `\$this->assertSame('Access denied', \$result);`.
-- **DO NOT GUESS.** Your assertions must be precise.
+# PRIMARY GOAL
+Your goal is to improve the mutation score and fix vulnerabilities related **ONLY to Directory and Path Traversal (CWE-22, and CWE-639)** by generating code.
 
 ---
+# CRITICAL MANDATE: HOW TO WRITE CODE THAT WORKS
+You must follow two sets of rules perfectly: Rules for the PHP code you generate, and rules for the JSON format you output.
+
+### Step 1: Analyze and Verify (MOST IMPORTANT STEP)
+Before writing any code, you MUST use the `get_file_content` tool to read the source code of the class to be tested (e.g., `src/VulnFileRead.php`). Then, you MUST verify the following:
+- **METHOD VERIFICATION:** The test MUST ONLY call methods that actually exist in the source code you just read. If the class has a `read()` method, your test MUST NOT call a non-existent `readFile()` method.
+- **IMPORT VERIFICATION:** Your test will need `use` statements. You MUST identify the correct namespaces for the class under test (e.g., `App\VulnFileRead`) and any base test classes (e.g., `Tests\BaseVulnerableScript`) and include them. `use PHPUnit\Framework\TestCase;` is always required.
+
+---
+### Step 2: Write Logically Correct Code
+1.  **Analyze and Verify First:** Use `get_file_content` to read the source code. ONLY call methods that exist. Identify and `use` the correct namespaces.
+2.  **Use Existing `vulnerable_files` Directory:** DO NOT recreate it. Use `list_directory_contents` and `get_file_content` to discover the real file system and use its contents in your assertions.
+3.  **PHP 8.2 Syntax:** All code must be compatible. Test functions require a `: void` return type. Data providers require `: array`.
+4.  **Target Surviving Mutants:** Your generated code (either a patch or a test) must be specifically designed to kill the surviving mutants mentioned in the analysis.
+
 # OUTPUT FORMAT AND STRUCTURE (NON-NEGOTIABLE)
+This is the most common point of failure. Follow these JSON formatting rules with perfect precision.
+1.  **JSON ARRAY ONLY:** Your entire response must be a single, raw JSON array `[...]`.
+2.  **NO PRETTY-PRINTING:** The JSON array MUST be a **compact, single-line string.** It must not contain any newlines or indentation for human readability. It must be a single line of text.
+3.  **VALID JSON CONTENT:**
+    - Each object in the array must have two keys: `"file_path"` and `"code"`.
+    - The `"code"` value must be a valid JSON string. This means all newline characters within the code MUST be escaped as `\n`, and all backslashes must be escaped as `\\`.
+4.  **NO EXTRA TEXT:** Do not wrap the response in markdown ```json. Do not add any text before or after the JSON array. The first character of your response must be `[` and the last must be `]`.
 
-1.  Your ENTIRE response MUST be a single, raw JSON object.
-2.  The JSON object MUST have two keys: `"file_path"` (string) and `"code"` (string).
-3.  The `"code"` value must be the complete, valid PHP code for the test file, with all special characters correctly escaped for JSON.
-4.  **DO NOT** wrap the JSON in markdown (```json). Your response must start with `{` and end with `}`.
+### Example of the required **compact, single-line** format:
+`[{"file_path":"src/VulnFileRead.php","code":"<?php\\n\\nnamespace App;\\n\\n// Patched code..."},{"file_path":"tests/PatchedVulnFileReadTest.php","code":"<?php\\n\\nnamespace Tests;\\n\\nuse App\\\\VulnFileRead;\\nuse PHPUnit\\\\Framework\\\\TestCase;\\n\\n// Test for patch..."}]`
 EOT;
     }
 }
