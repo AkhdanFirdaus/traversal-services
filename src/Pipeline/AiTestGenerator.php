@@ -14,6 +14,8 @@ use Gemini\Data\Schema;
 use Gemini\Data\Tool;
 use Gemini\Enums\DataType;
 use Gemini\Enums\Role;
+use Gemini\Resources\ChatSession;
+use Symfony\Component\Process\Process;
 use Utils\FileHelper;
 use Utils\JsonCleaner;
 use Utils\Logger;
@@ -22,6 +24,7 @@ use Utils\PromptBuilder;
 class AiTestGenerator
 {
     private Client $client;
+    private int $maxFixRetries = 5;
 
     public function __construct(private string $projectDir, private string $outputDir, private Logger $logger) {
         $this->client = Gemini::client($_ENV['GEMINI_API_KEY']);
@@ -216,6 +219,77 @@ class AiTestGenerator
 
         return $analysisArray;
     }
+
+    /**
+     * New private method to validate and fix a generated test case.
+     */
+    private function validateAndFixTest(array $generatedFileObject, ChatSession $chat): ?array
+    {
+        $currentCode = $generatedFileObject['code'];
+        $filePath = $generatedFileObject['file_path'];
+
+        for ($i = 1; $i <= $this->maxFixRetries; $i++) {
+            // Write the current version of the code to a temporary file
+            $tempFile = tempnam(sys_get_temp_dir(), 'test_') . '.php';
+            file_put_contents($tempFile, $currentCode);
+
+            // Extract class name from the test file path to use with --filter
+            $className = basename($filePath, '.php');
+
+            $this->logger->info("Validating generated test (Attempt {$i}/{$this->maxFixRetries})", [
+                'test_class' => $className,
+                'temp_path' => $tempFile
+            ]);
+
+            $process = new Process([
+                'vendor/bin/phpunit',
+                '--fail-on-warning',
+                '--fail-on-risky',
+                '--process-isolation',
+                '--filter',
+                $className
+            ], $this->projectDir);
+
+            $process->run();
+
+            if ($process->isSuccessful()) {
+                $this->logger->info("Validation successful for {$className}.");
+                unlink($tempFile);
+                $generatedFileObject['code'] = $currentCode; // Ensure the final good code is set
+                return $generatedFileObject;
+            }
+
+            // If it failed, send the error back to the AI for a fix
+            $errorOutput = $process->getOutput() . "\n" . $process->getErrorOutput();
+            $this->logger->warning("Validation failed for {$className}. Asking AI for a fix.", [
+                'attempt' => $i,
+                'error' => $errorOutput
+            ]);
+
+            $fixPrompt = "The previously generated test failed with the following error. Please fix the code. Do not apologize, just provide the corrected JSON object.\n\nPHPUnit Output:\n```\n{$errorOutput}\n```";
+            
+            $response = $chat->sendMessage($fixPrompt);
+
+            if (empty($response->parts())) {
+                $this->logger->error("AI returned an empty response during fix attempt.", ['test_class' => $className]);
+                continue; // Try again or fail
+            }
+
+            try {
+                $fixedFileObject = JsonCleaner::parse($response->text());
+                // The AI might return an array or a single object. Standardize to a single object.
+                $currentCode = (isset($fixedFileObject[0])) ? $fixedFileObject[0]['code'] : $fixedFileObject['code'];
+            } catch (\JsonException $e) {
+                $this->logger->error("Failed to parse AI's fix response.", ['error' => $e->getMessage(), 'response' => $response->text()]);
+                continue; // The fix was invalid JSON, try asking again
+            } finally {
+                 unlink($tempFile);
+            }
+        }
+
+        $this->logger->error("Failed to fix test case {$className} after {$this->maxFixRetries} attempts.");
+        return null;
+    }
     
     /**
      * PHASE 2: Generates the test case based on the analysis.
@@ -245,18 +319,39 @@ class AiTestGenerator
             $turn++;
         }
 
-        $this->logger->info('Received final generated file(s) from the model.');
+        $this->logger->info('Received initial generated file(s) from the model.');
+
+        if (empty($response->parts())) {
+            throw new \Exception('Model returned an empty response during initial generation.');
+        }
+
         $rawGeneratedOutput = $response->text();
         $this->logger->debug('Raw generation output from model:', ['response' => $rawGeneratedOutput]);
         
         $generatedFilesArray = JsonCleaner::parse($rawGeneratedOutput);
-        $this->logger->info('Successfully parsed generation output.', ['file_count' => count($generatedFilesArray)]);
+        
+        $validatedFiles = [];
+        if (isset($generatedFilesArray['file_path'])) {
+            $generatedFilesArray = [$generatedFilesArray];
+        }
+
+        foreach ($generatedFilesArray as $fileObject) {
+            // We pass the main chat session to the validation loop so it can ask for fixes.
+            $validatedObject = $this->validateAndFixTest($fileObject, $chat);
+            if ($validatedObject !== null) {
+                $validatedFiles[] = $validatedObject;
+            } else {
+                $this->logger->error("Could not generate a valid file, skipping.", ['file_path' => $fileObject['file_path'] ?? 'unknown']);
+            }
+        }
+
+        $this->logger->info('Successfully validated and fixed generation output.', ['file_count' => count($validatedFiles)]);
 
         $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate.json";
-        file_put_contents($resultsPath, json_encode($generatedFilesArray, JSON_PRETTY_PRINT));
+        file_put_contents($resultsPath, json_encode($validatedFiles, JSON_PRETTY_PRINT));
         $this->logger->info('Generation results saved.', ['path' => $resultsPath]);
 
-        return $generatedFilesArray;
+        return $validatedFiles;
     }
 
     public function rewriteCode(array $generatedFilesArray) : string
