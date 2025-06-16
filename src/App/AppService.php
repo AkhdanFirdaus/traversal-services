@@ -10,6 +10,7 @@ use Utils\Logger;
 use Utils\SocketNotifier;
 use Dotenv\Dotenv;
 use Pipeline\PhpUnitRunner;
+use Pipeline\Reporter;
 use Utils\FileHelper;
 use Utils\PromptBuilder;
 use Utils\ReportParser;
@@ -140,29 +141,21 @@ class AppService
             $this->logger->info("All generation attempts are complete. Running final validation...");
             $finalMutationReportContent = $infectionRunner->run();
             $infectionRunner->saveReport('msi-final.json', 'summary');
-            $infectionRunner->saveReport('msi-final-serve.json', 'final-report');
             $this->logger->info("Final MSI score calculated.");
 
             $exportPath = $projectDir . DIRECTORY_SEPARATOR . 'tests';
             $exporter = new Exporter($this->logger, $this->notifier, $exportPath, $outputDir);
             
-            $exporter->run($iteration);
-            // // Return final results
-            // $results = [
-            //     'taskId' => $this->taskId,
-            //     'repoUrl' => $gitUrl,
-            //     'vulnerabilities' => $vulnerabilities,
-            //     'initialMsi' => $initialMsi,
-            //     'finalMsi' => $finalMsi,
-            //     'exportedTestsPath' => $exportResult['exportDir'],
-            //     'downloadableZip' => $exportResult['zipPath'],
-            //     'reports' => $reports
-            // ];
+            $downloadDir = $exporter->run($iteration);
 
-            // $this->logger->info("Repository processing completed successfully", $results);
-            // $this->notifier->sendUpdate("Processing completed", 100);
+            $reporter = new Reporter();
+            $results = $reporter->run($initialMutationReportContent, $finalMutationReportContent, $downloadDir);
+            $reporter->save($outputDir, $results, 'msi-final-report.json');
 
-            return [];
+            $this->logger->info("Repository processing completed successfully", $results);
+            $this->notifier->sendUpdate("Processing completed", 100, $results);
+
+            return $results;
 
         } catch (\Exception $e) {
             $this->logger->error("Error processing repository", [
@@ -171,7 +164,7 @@ class AppService
             ]);
             throw $e;
         } finally {
-            // $cloner->deleteTempDirectory();
+            $cloner->deleteTempDirectory();
         }
     }
 } 

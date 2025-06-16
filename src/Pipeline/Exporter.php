@@ -15,7 +15,7 @@ class Exporter
         private string $targetDir,
     ) {}
 
-    public function run($iterate): array
+    public function run($iterate): string
     {
         // Grab all the files contained in $testDir
         $testFiles = glob($this->sourceDir . '/*.php');
@@ -31,10 +31,7 @@ class Exporter
         $zipName = sprintf('generated_test_cases_%s.zip', $iterate);
         $zipPath = $this->createZipArchive($zipName, $this->targetDir, $testFiles);
 
-        return [
-            'exportDir' => $this->targetDir,
-            'zipPath' => $zipPath
-        ];
+        return $zipPath;
     }
 
     private function createZipArchive(string $zipName, string $exportDir, array $selectedTests): string
