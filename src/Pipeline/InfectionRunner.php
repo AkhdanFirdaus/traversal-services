@@ -62,6 +62,9 @@ class InfectionRunner
             case 'exclude-killed':
                 $report = ReportParser::excludingKilled($this->content);
                 break;
+            case 'final-report':
+                $report = ReportParser::finalReport($this->content);
+                break;
             default:
                 $report = $this->content;
                 break;

@@ -140,6 +140,7 @@ class AppService
             $this->logger->info("All generation attempts are complete. Running final validation...");
             $finalMutationReportContent = $infectionRunner->run();
             $infectionRunner->saveReport('msi-final.json', 'summary');
+            $infectionRunner->saveReport('msi-final-serve.json', 'final-report');
             $this->logger->info("Final MSI score calculated.");
 
             $exportPath = $projectDir . DIRECTORY_SEPARATOR . 'tests';

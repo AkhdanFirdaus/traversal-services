@@ -27,6 +27,53 @@ class ReportParser
         return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 
+    public static function finalReport(string $reportJson) {
+        // Load the Infection report
+        $report = json_decode(file_get_contents('infection-report.json'), true);
+
+        // Extract MSI and mutation stats
+        $msiScore = $report['stats']['msi'] ?? '-';
+        $coverage = $report['stats']['mutationCodeCoverage'] ?? '-';
+        $killed = $report['stats']['killedCount'] ?? 0;
+        $escaped = $report['stats']['escapedCount'] ?? 0;
+        $total = $report['stats']['totalMutantsCount'] ?? 0;
+
+        // Initialize test cases from escaped mutants
+        $testcases = [];
+
+        foreach ($report['escaped'] as $escapedMutant) {
+            $mutator = $escapedMutant['mutator'];
+            $filePath = ltrim($mutator['originalFilePath'], '/app/');
+            $line = $mutator['originalStartLine'];
+            $badCode = trim($mutator['originalSourceCode']);
+            $fixedCode = trim($mutator['mutatedSourceCode']);
+
+            $testcases[] = [
+                'file' => $filePath,
+                'line' => $line,
+                'description' => $mutator['mutatorName'] . ' mutation escaped',
+                'badCode' => $badCode,
+                'fixedCode' => $fixedCode,
+            ];
+        }
+
+        // Final report structure
+        $finalReport = [
+            'msi_score' => number_format($msiScore, 2) . '%',
+            'msi_score_after' => '-',
+            'detail' => [
+                'coverage' => number_format($coverage, 2) . '%',
+                'kill' => $killed,
+                'unkill' => $escaped,
+                'total' => $total
+            ],
+            'testcases' => $testcases,
+            'download_path' => 'https://securegen/files/testcase-traversal.zip',
+        ];
+
+        return $finalReport;
+    }
+
     public static function generateMutationSummary(string $reportJson, string $projectDir): string
     {
         $reportData = json_decode($reportJson, true);
