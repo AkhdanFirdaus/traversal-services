@@ -15,6 +15,7 @@ use Gemini\Data\Tool;
 use Gemini\Enums\DataType;
 use Gemini\Enums\Role;
 use Gemini\Resources\ChatSession;
+use Gemini\Responses\GenerativeModel\GenerateContentResponse;
 use Symfony\Component\Process\Process;
 use Utils\FileHelper;
 use Utils\JsonCleaner;
@@ -38,32 +39,32 @@ class AiTestGenerator
         return new GenerationConfig(temperature: 0.1);
     }
 
-    private function getFileContentTool(): Tool {
+    private function getAvailableTools(): Tool {
         return new Tool(
             functionDeclarations: [
                 new FunctionDeclaration(
                     name: 'get_file_content',
-                    description: "Retrieves the full content of a specific file from the project. Use this to read project structure, reports, or source code.",
+                    description: "Retrieves the full content of a specific file. Use to read source code or related tests.",
                     parameters: new Schema(
                         type: DataType::OBJECT,
                         properties: [
                             'file_path' => new Schema(
                                 type: DataType::STRING,
-                                description: 'The absolute path to the file on disk.'
+                                description: 'The relative path to the file from the project root (e.g., "src/VulnFileRead.php").'
                             ),
                         ],
                         required: ['file_path']
-                    ),
+                    )
                 ),
                 new FunctionDeclaration(
                     name: 'list_directory_contents',
-                    description: "Lists the files and directories inside a given project path. Use this to discover the `vulnerable_files` structure.",
+                    description: "Lists the files and directories inside a given path. Use to discover the `vulnerable_files` structure.",
                     parameters: new Schema(
                         type: DataType::OBJECT,
                         properties: [
                             'path' => new Schema(
                                 type: DataType::STRING,
-                                description: 'The relative path of the directory to list from the project root (e.g., "vulnerable_files/users/").'
+                                description: 'The relative path of the directory to list (e.g., "vulnerable_files/users/").'
                             )
                         ],
                         required: ['path']
@@ -73,13 +74,15 @@ class AiTestGenerator
         );
     }
 
-    /**
-     * Executes the file read operation requested by the model.
-     */
     private function executeGetFileContent(string $filePath): string
     {
         $this->logger->info('Executing tool: get_file_content', ['requested_path' => $filePath]);
-        $fullPath = $this->projectDir . DIRECTORY_SEPARATOR . $filePath;
+        
+        if (str_starts_with($filePath, '/')) {
+            $fullPath = $filePath;
+        } else {
+            $fullPath = $this->projectDir . DIRECTORY_SEPARATOR . $filePath;
+        }
 
         $canonicalPath = realpath($fullPath);
 
@@ -87,17 +90,15 @@ class AiTestGenerator
             $this->logger->warning('File not found for get_file_content', ['path' => $fullPath]);
             return "Error: File not found at path: {$filePath}";
         }
+        
+        $isWithinProject = str_starts_with($canonicalPath, realpath($this->projectDir));
+        $isAllowedGlobal = str_starts_with($canonicalPath, '/app/');
 
-        if (strpos($canonicalPath, realpath($this->projectDir)) !== 0) {
-            $this->logger->error('Access denied attempt in get_file_content', [
-                'requested_path' => $filePath,
-                'canonical_path' => $canonicalPath,
-                'project_dir' => realpath($this->projectDir)
-            ]);
-            return "Error: Access denied. Attempted to read file outside of the project directory.";
+        if (!$isWithinProject && !$isAllowedGlobal) {
+             $this->logger->error('Access denied in get_file_content', ['path' => $filePath]);
+            return "Error: Access denied. Attempted to read file outside of allowed directories.";
         }
         
-        $this->logger->debug('Reading file content', ['path' => $canonicalPath]);
         try {
             $content = FileHelper::readFile($canonicalPath);
             return "--- Content of " . basename($filePath) . " ---\n{$content}\n--- End Content ---";
@@ -107,21 +108,17 @@ class AiTestGenerator
         }
     }
 
-    /**
-     * Executes the directory listing operation requested by the model.
-     */
     private function executeListDirectoryContents(string $path): array
     {
         $this->logger->info('Executing tool: list_directory_contents', ['requested_path' => $path]);
         $fullPath = $this->projectDir . DIRECTORY_SEPARATOR . $path;
-
+        
         if (!is_dir($fullPath)) {
             $this->logger->warning('Directory not found for list_directory_contents', ['path' => $fullPath]);
             return ['error' => "Directory not found at {$fullPath}"];
         }
 
         try {
-            $this->logger->debug('Scanning directory', ['path' => $fullPath]);
             $contents = array_values(array_diff(scandir($fullPath), ['.', '..']));
             return ['contents' => $contents];
         } catch (\Throwable $th) {
@@ -134,38 +131,108 @@ class AiTestGenerator
     {
         $functionName = $functionCall->name;
         $args = $functionCall->args;
-
         $this->logger->info('Model requested function call.', ['name' => $functionName, 'args' => $args]);
 
-        if ($functionCall->name === 'get_file_content') {
-            $result = $this->executeGetFileContent($args['file_path']);
-            return new Content(
-                parts: [
-                    new Part(
-                        functionResponse: new FunctionResponse(
-                            name: 'get_file_content',
-                            response: ['content' => $result]
-                        )
-                    )
-                ],
-                role: Role::MODEL
-            );
-        }
+        $result = match ($functionName) {
+            'get_file_content' => ['content' => $this->executeGetFileContent($args['file_path'])],
+            'list_directory_contents' => $this->executeListDirectoryContents($args['path']),
+            default => ['error' => 'Unknown function called.'],
+        };
 
-        if ($functionName === 'list_directory_contents') {
-            $result = $this->executeListDirectoryContents($args['path']);
-            return new Content(
-                parts: [ new Part( functionResponse: new FunctionResponse(name: $functionName, response: $result)) ],
-                role: Role::MODEL
-            );
+        if ($functionName === 'unknown') {
+            $this->logger->warning('Model called an unknown function.', ['name' => $functionName]);
         }
-
-        $this->logger->warning('Model called an unknown function.', ['name' => $functionName]);
 
         return new Content(
-            parts: [ new Part( functionResponse: new FunctionResponse(name: $functionCall->name, response: ['error' => 'Unknown function called.']) ) ],
+            parts: [ new Part( functionResponse: new FunctionResponse(name: $functionName, response: $result)) ],
             role: Role::MODEL
         );
+    }
+
+    private function validateAndFixTest(array $generatedFileObject, ChatSession $chat, array $originalAnalysis): ?array
+    {
+        $currentCode = $generatedFileObject['code'];
+        $filePath = $generatedFileObject['file_path'];
+
+        for ($i = 1; $i <= $this->maxFixRetries; $i++) {
+            $tempFile = tempnam(sys_get_temp_dir(), 'TestValidation_') . '.php';
+            file_put_contents($tempFile, $currentCode);
+
+            $this->logger->info("Validating generated file (Attempt {$i}/{$this->maxFixRetries})", ['file' => $filePath]);
+
+            $process = new Process(['vendor/bin/phpunit', '--fail-on-warning', '--process-isolation', $tempFile], $this->projectDir);
+            $process->run();
+
+            if ($process->isSuccessful()) {
+                $this->logger->info("Validation successful for {$filePath}.");
+                unlink($tempFile);
+                $generatedFileObject['code'] = $currentCode;
+                return $generatedFileObject;
+            }
+
+            $errorOutput = $process->getOutput() . "\n" . $process->getErrorOutput();
+            unlink($tempFile);
+
+            if ($i === $this->maxFixRetries) {
+                $this->logger->error("Final validation attempt failed for {$filePath}.", ['error' => $errorOutput]);
+                break; 
+            }
+
+            $this->logger->warning("Validation failed for {$filePath}. Asking AI for a fix.", ['attempt' => $i, 'error' => $errorOutput]);
+            
+            // REVISED CONTEXT-AWARE FIX PROMPT
+            $analysisJson = json_encode($originalAnalysis);
+            $fixPrompt = <<<EOT
+The previously generated code for `{$filePath}` failed validation. This is a critical error.
+
+**Original Goal & Context:**
+Your original task was to generate code based on this analysis:
+```json
+{$analysisJson}
+```
+
+**The Code That Failed:**
+```php
+{$currentCode}
+```
+
+**PHPUnit Error Output:**
+```
+{$errorOutput}
+```
+
+Please analyze the original goal, the failed code, and the specific error message. Provide a corrected version of the JSON object for this file. Ensure the file path remains `{$filePath}` and the new code is syntactically correct, logically sound, and directly addresses the error. Do not apologize.
+EOT;
+
+            $response = $chat->sendMessage($fixPrompt);
+
+            if (empty($response->parts())) {
+                $this->logger->error("AI returned an empty response during fix attempt for {$filePath}.");
+                continue;
+            }
+
+            try {
+                $fixedFilesArray = JsonCleaner::parse($response->text());
+                $fixedFileObject = (isset($fixedFilesArray[0])) ? $fixedFilesArray[0] : $fixedFilesArray;
+                // Ensure the keys exist before trying to access them
+                if (isset($fixedFileObject['code']) && isset($fixedFileObject['file_path'])) {
+                     // Check that the AI didn't hallucinate a new file_path
+                    if ($fixedFileObject['file_path'] === $filePath) {
+                        $currentCode = $fixedFileObject['code'];
+                    } else {
+                        $this->logger->warning("AI returned a fix for a different file path. Ignoring.", [
+                            'expected' => $filePath, 
+                            'received' => $fixedFileObject['file_path']
+                        ]);
+                    }
+                }
+            } catch (\JsonException $e) {
+                $this->logger->error("Failed to parse AI's fix response.", ['error' => $e->getMessage(), 'response' => $response->text()]);
+            }
+        }
+
+        $this->logger->error("Failed to generate a valid file for {$filePath} after {$this->maxFixRetries} attempts.");
+        return null;
     }
 
     /**
@@ -189,7 +256,7 @@ class AiTestGenerator
         $chat = $this->client
             ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
             ->withGenerationConfig($this->getGenerationConfig())
-            ->withTool($this->getFileContentTool())
+            ->withTool($this->getAvailableTools())
             ->startChat(history: [
                 Content::parse(part: $availableFilesContext, role: Role::USER),
             ]);
@@ -220,96 +287,22 @@ class AiTestGenerator
         return $analysisArray;
     }
 
-    /**
-     * New private method to validate and fix a generated test case.
-     */
-    private function validateAndFixTest(array $generatedFileObject, ChatSession $chat): ?array
+    public function generateTestCase(array $analyzerResults, int $iterate): array
     {
-        $currentCode = $generatedFileObject['code'];
-        $filePath = $generatedFileObject['file_path'];
-
-        for ($i = 1; $i <= $this->maxFixRetries; $i++) {
-            // Write the current version of the code to a temporary file
-            $tempFile = tempnam(sys_get_temp_dir(), 'test_') . '.php';
-            file_put_contents($tempFile, $currentCode);
-
-            // Extract class name from the test file path to use with --filter
-            $className = basename($filePath, '.php');
-
-            $this->logger->info("Validating generated test (Attempt {$i}/{$this->maxFixRetries})", [
-                'test_class' => $className,
-                'temp_path' => $tempFile
-            ]);
-
-            $process = new Process([
-                'vendor/bin/phpunit',
-                '--fail-on-warning',
-                '--fail-on-risky',
-                '--process-isolation',
-                '--filter',
-                $className
-            ], $this->projectDir);
-
-            $process->run();
-
-            if ($process->isSuccessful()) {
-                $this->logger->info("Validation successful for {$className}.");
-                unlink($tempFile);
-                $generatedFileObject['code'] = $currentCode; // Ensure the final good code is set
-                return $generatedFileObject;
-            }
-
-            // If it failed, send the error back to the AI for a fix
-            $errorOutput = $process->getOutput() . "\n" . $process->getErrorOutput();
-            $this->logger->warning("Validation failed for {$className}. Asking AI for a fix.", [
-                'attempt' => $i,
-                'error' => $errorOutput
-            ]);
-
-            $fixPrompt = "The previously generated test failed with the following error. Please fix the code. Do not apologize, just provide the corrected JSON object.\n\nPHPUnit Output:\n```\n{$errorOutput}\n```";
-            
-            $response = $chat->sendMessage($fixPrompt);
-
-            if (empty($response->parts())) {
-                $this->logger->error("AI returned an empty response during fix attempt.", ['test_class' => $className]);
-                continue; // Try again or fail
-            }
-
-            try {
-                $fixedFileObject = JsonCleaner::parse($response->text());
-                // The AI might return an array or a single object. Standardize to a single object.
-                $currentCode = (isset($fixedFileObject[0])) ? $fixedFileObject[0]['code'] : $fixedFileObject['code'];
-            } catch (\JsonException $e) {
-                $this->logger->error("Failed to parse AI's fix response.", ['error' => $e->getMessage(), 'response' => $response->text()]);
-                continue; // The fix was invalid JSON, try asking again
-            } finally {
-                 unlink($tempFile);
-            }
-        }
-
-        $this->logger->error("Failed to fix test case {$className} after {$this->maxFixRetries} attempts.");
-        return null;
-    }
-    
-    /**
-     * PHASE 2: Generates the test case based on the analysis.
-     */
-    public function generateTestCase(array $analyzerResults, $iterate): array {
         $this->logger->info("Starting AiTestGenerator [Phase 2: Generation] for iteration {$iterate}...");
-
-        $analyzerResultsJson = json_encode($analyzerResults, JSON_PRETTY_PRINT);
         
+        $analyzerResultsJson = json_encode($analyzerResults, JSON_PRETTY_PRINT);
+        $finalPrompt = PromptBuilder::generatorPrompt() . "\n\n# Analysis to Address:\n$analyzerResultsJson";
+        $this->logger->debug('Sending generation prompt.');
+
         $chat = $this->client
             ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
             ->withGenerationConfig($this->getGenerationConfig())
-            ->withTool($this->getFileContentTool())
+            ->withTool($this->getAvailableTools())
             ->startChat();
-        
-        $finalPrompt = PromptBuilder::generatorPrompt() . "\n\n# Analysis to Address:\n" . $analyzerResultsJson;;
+
         $response = $chat->sendMessage($finalPrompt);
-
-        $this->logger->debug('Sending generation prompt.');
-
+        
         $turn = 1;
         while ($response->parts()[0]->functionCall !== null) {
             $this->logger->info("Entering generation function call loop, turn #{$turn}.");
@@ -322,6 +315,7 @@ class AiTestGenerator
         $this->logger->info('Received initial generated file(s) from the model.');
 
         if (empty($response->parts())) {
+            // Handle safety-blocked responses
             throw new \Exception('Model returned an empty response during initial generation.');
         }
 
@@ -330,14 +324,16 @@ class AiTestGenerator
         
         $generatedFilesArray = JsonCleaner::parse($rawGeneratedOutput);
         
+        // New validation step
         $validatedFiles = [];
+        // The AI response might be a single object or an array of objects. Standardize it.
         if (isset($generatedFilesArray['file_path'])) {
             $generatedFilesArray = [$generatedFilesArray];
         }
 
         foreach ($generatedFilesArray as $fileObject) {
-            // We pass the main chat session to the validation loop so it can ask for fixes.
-            $validatedObject = $this->validateAndFixTest($fileObject, $chat);
+            // Pass the original analysis results to the validation loop to provide context for fixes.
+            $validatedObject = $this->validateAndFixTest($fileObject, $chat, $analyzerResults);
             if ($validatedObject !== null) {
                 $validatedFiles[] = $validatedObject;
             } else {
@@ -354,29 +350,39 @@ class AiTestGenerator
         return $validatedFiles;
     }
 
-    public function rewriteCode(array $generatedFilesArray) : string
+    private function handleEmptyResponse(GenerateContentResponse $response, string $context): void
+    {
+        $candidate = $response->candidates[0] ?? null;
+        $safetyRatings = $candidate?->safetyRatings ?? [];
+        $finishReason = $candidate?->finishReason?->value ?? 'UNKNOWN';
+        $ratingsArray = array_map(fn($rating) => $rating->toArray(), $safetyRatings);
+
+        $logContext = [
+            'context' => $context,
+            'finishReason' => $finishReason,
+            'safetyRatings' => $ratingsArray,
+        ];
+
+        $this->logger->error('Model response was empty. This is often caused by safety filters.', $logContext);
+        throw new \Exception('Model returned an empty response. The content may have been blocked by safety settings. Check logs for details.');
+    }
+
+    public function rewriteCode(array $generatedFilesArray): void
     {
         $this->logger->info('Rewriting code with generated files...', ['file_count' => count($generatedFilesArray)]);
 
         if (empty($generatedFilesArray)) {
-                throw new \Exception("Generated files array is empty.");
-        }
-        
-        // The JSON from the model should be an array of file objects.
-        // Let's ensure it's an array of objects for safety.
-        if (!is_array($generatedFilesArray[0] ?? null)) {
-            $this->logger->warning('Generated result is a single object, wrapping it in an array for processing.');
-            $generatedFilesArray = [$generatedFilesArray];
+             $this->logger->warning("No valid files were generated or fixed, so no files will be written.");
+             return;
         }
         
         foreach ($generatedFilesArray as $fileObject) {
             if (!isset($fileObject['file_path']) || !isset($fileObject['code'])) {
-                $this->logger->warning('Skipping invalid entry in generated JSON array.', ['entry' => $fileObject]);
-                continue;
+                 $this->logger->warning('Skipping invalid entry in generated JSON array.', ['entry' => $fileObject]);
+                 continue;
             }
 
             $dest = $this->projectDir . DIRECTORY_SEPARATOR . $fileObject['file_path'];
-        
             $this->logger->info('Writing generated file.', ['path' => $dest]);
 
             $dir = dirname($dest);
@@ -388,7 +394,5 @@ class AiTestGenerator
         }
 
         $this->logger->info('Finished rewriting all generated files.');
-
-        return $this->projectDir . DIRECTORY_SEPARATOR . 'tests';
     }
 } 

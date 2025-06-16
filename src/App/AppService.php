@@ -11,6 +11,7 @@ use Utils\SocketNotifier;
 use Dotenv\Dotenv;
 use Pipeline\PhpUnitRunner;
 use Utils\FileHelper;
+use Utils\ReportParser;
 
 class AppService
 {
@@ -34,9 +35,11 @@ class AppService
     public function handleProcessRepo(string $repoUrl, string $roomName): array
     {
         try {
-            // Step 1: Clone Repository
+            // =================================================================
+            // Step 1: Setup & Initial Baseline Run
+            // =================================================================
+            
             $this->logger->info("Starting repository processing", ['repo' => $repoUrl, 'taskId' => $roomName]);
-            // $this->notifier->sendUpdate("Starting repository processing", 0);
             
             $cloner = new RepositoryCloner($repoUrl, $roomName);
             $cloner->run();
@@ -44,92 +47,85 @@ class AppService
             $projectDir = $cloner->getTempDirectory();
 
             $outputDir = '/app/outputs' . DIRECTORY_SEPARATOR . basename($projectDir);
-            mkdir($outputDir, 0755, true);
+            if (!is_dir($outputDir)) {
+                mkdir($outputDir, 0755, true);
+            }
 
-            // Step 2: Initial PHP Unit Analysis and Infection Run
-            $phpUnitRunner = new PhpUnitRunner(
-                $projectDir, 
-                'tests', 
-                $outputDir,
-                $this->logger,
-            );
+            $infectionRunner = new InfectionRunner($projectDir, 'tests', $outputDir, $this->logger);
             
-            $infectionRunner = new InfectionRunner(
-                $projectDir, 
-                'tests', 
-                $outputDir,
-                $this->logger,
-            );
-            
-            $initialUnit = $phpUnitRunner->run();
-            $phpUnitRunner->saveReport('phpunit-initial.json');
-
-            $initialMsi = $infectionRunner->run();
+            // Run Infection ONCE to get our master "to-do list"
+            $this->logger->info("Establishing initial project baseline with a single Infection run...");
+            $initialMutationReportContent = $infectionRunner->run();
             $infectionRunner->saveReport('msi-initial.json');
+            $this->logger->info("Initial baseline established.");
 
-            // Step 3: Generate AI Test Cases
-            $generator = new AiTestGenerator(
-                $projectDir, 
-                $outputDir, 
-                $this->logger,
-            );
+            // Parse the report to get a structured list of targets
+            $initialReportSummary = ReportParser::generateMutationSummary($initialMutationReportContent, $projectDir);
+            $analysisTargets = json_decode($initialReportSummary, true)['survivingMutantsByFile'] ?? [];
+
+            if (empty($analysisTargets)) {
+                $this->logger->info("No surviving mutants found in the initial report. Nothing to do. Exiting.");
+                // You can add final export logic here if needed
+                return [];
+            }
+
+            // =================================================================
+            // Step 2: Simplified "MSI-Oriented" Generation Loop
+            // =================================================================
+            $generator = new AiTestGenerator($projectDir, $outputDir, $this->logger);
             
-            $this->logger->info('AIGenerator: Preparing to Generate Test Case using Function Calling...');
-            
-            $unitResults = $initialUnit;
-            $mutationReport = $initialMsi;
-            
-            for ($i=1; $i <= 20; $i++) { 
+            $iteration = 1;
+            // Loop through each file that has surviving mutants
+            foreach (array_keys($analysisTargets) as $fileToFix) {
+                $this->logger->info("Starting AI Generation Iteration #{$iteration}", [
+                    'target_file' => $fileToFix
+                ]);
+
                 try {
-                    $this->logger->info("Iteration-$i");
+                    // Create a highly specific analysis result for the generator
+                    $specificAnalysis = [[
+                        'file' => $fileToFix,
+                        'reason' => 'This file has surviving mutants that need to be killed.',
+                        'details' => $analysisTargets[$fileToFix] // Provide specific mutant details
+                    ]];
 
-                    $projectStructure = FileHelper::getProjectStructure($this->logger, $projectDir, $outputDir, $i);
-
-                    $analizeSystem = $generator->analyzeSystems(
-                        $projectStructure,
-                        $unitResults,
-                        $mutationReport,
-                        $i
+                    // Generate AND self-validate code for this specific target.
+                    // This method now contains the internal "test-and-fix" loop.
+                    $generatedFiles = $generator->generateTestCase(
+                        $specificAnalysis,
+                        $iteration
                     );
                     
-                    $generatedResult = $generator->generateTestCase(
-                        $analizeSystem,
-                        $i
-                    );
-                    
-                    $exportPath = $generator->rewriteCode($generatedResult);
+                    if (empty($generatedFiles)) {
+                        $this->logger->warning("Generation phase produced no valid files for {$fileToFix}. Proceeding to next target.");
+                        continue;
+                    }
 
-                    $unitRes = $phpUnitRunner->run([
-                        "--process-isolation",
-                    ]);
-                    $phpUnitRunner->saveReport("phpunit-$i.json");
-                    
-                    $msiRes = $infectionRunner->run();
-                    $infectionRunner->saveReport("msi-$i.json");
-
-                    $unitResults = $unitRes;
-                    $mutationReport = $msiRes;
+                    // Integrate the validated files into the project
+                    $generator->rewriteCode($generatedFiles);
                     
                 } catch (\Throwable $th) {
-                    $this->logger->error("Iteration-$i failed to generate", [
+                    $this->logger->error("Iteration #{$iteration} failed for target {$fileToFix}.", [
                         'stack' => $th->getTraceAsString(),
                         'error' => $th->getMessage(),
                     ]);
-                    continue;
+                    continue; 
                 }
+                $iteration++;
             }
             
-            // // Step 4: Final PHP Unit Analysis and Infection Run
+            // =================================================================
+            // Step 3: Final Validation and Export
+            // =================================================================
+            $this->logger->info("All generation attempts are complete. Running final validation...");
+            $finalMutationReportContent = $infectionRunner->run();
+            $infectionRunner->saveReport('msi-final.json');
+            $this->logger->info("Final MSI score calculated.");
+
+            $exportPath = $projectDir . DIRECTORY_SEPARATOR . 'tests';
+            $exporter = new Exporter($this->logger, $this->notifier, $exportPath, $outputDir);
             
-            // // Step 5: Export Tests
-            $exporter = new Exporter(
-                $this->logger, 
-                $this->notifier,
-                $exportPath,
-                $outputDir
-            );
-            
-            $exporter->run($i);
+            $exporter->run($iteration);
             // // Return final results
             // $results = [
             //     'taskId' => $this->taskId,
