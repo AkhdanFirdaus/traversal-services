@@ -169,6 +169,8 @@ class AppService
                 'trace' => $e->getTraceAsString()
             ]);
             throw $e;
+        } finally {
+            // $cloner->deleteTempDirectory();
         }
     }
 } 

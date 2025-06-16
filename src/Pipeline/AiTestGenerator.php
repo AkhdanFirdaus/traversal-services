@@ -154,24 +154,32 @@ class AiTestGenerator
         $currentCode = $generatedFileObject['code'];
         $filePath = $generatedFileObject['file_path'];
 
+        $originalFilePath = $this->projectDir . DIRECTORY_SEPARATOR . $filePath;
+        $originalCode = FileHelper::readFile($originalFilePath);
+
         for ($i = 1; $i <= $this->maxFixRetries; $i++) {
-            $tempFile = tempnam(sys_get_temp_dir(), 'TestValidation_') . '.php';
-            file_put_contents($tempFile, $currentCode);
+            file_put_contents($originalFilePath, $currentCode);
 
-            $this->logger->info("Validating generated file (Attempt {$i}/{$this->maxFixRetries})", ['file' => $filePath]);
+            $this->logger->info("Validating generated file (Attempt {$i}/{$this->maxFixRetries})", [
+                'file' => $filePath,
+            ]);
 
-            $process = new Process(['vendor/bin/phpunit', '--fail-on-warning', '--process-isolation', $tempFile], $this->projectDir);
+            $process = new Process([
+                'vendor/bin/phpunit', 
+                '--fail-on-warning', 
+                '--process-isolation', 
+                '--filter', 
+                $filePath,
+            ], $this->projectDir);
             $process->run();
 
             if ($process->isSuccessful()) {
                 $this->logger->info("Validation successful for {$filePath}.");
-                unlink($tempFile);
                 $generatedFileObject['code'] = $currentCode;
                 return $generatedFileObject;
             }
 
             $errorOutput = $process->getOutput() . "\n" . $process->getErrorOutput();
-            unlink($tempFile);
 
             if ($i === $this->maxFixRetries) {
                 $this->logger->error("Final validation attempt failed for {$filePath}.", ['error' => $errorOutput]);
@@ -180,9 +188,7 @@ class AiTestGenerator
 
             $this->logger->warning("Validation failed for {$filePath}. Asking AI for a fix.", ['attempt' => $i, 'error' => $errorOutput]);
             
-            // REVISED CONTEXT-AWARE FIX PROMPT
-            // $analysisJson = json_encode($originalAnalysis);
-            $fixPrompt = "Regenerate the test case to fix the issue without changing class name.\nOutput from PHPUnit:```\n{$errorOutput}\n```";
+            $fixPrompt = "Regenerate the test case to fix the issue. Usually syntax error.\nOutput from PHPUnit:```\n{$errorOutput}\n```";
 
             $response = $chat->sendMessage($fixPrompt);
 
@@ -210,6 +216,8 @@ class AiTestGenerator
                 $this->logger->error("Failed to parse AI's fix response.", ['error' => $e->getMessage(), 'response' => $response->text()]);
             }
         }
+
+        file_put_contents($originalFilePath, $originalCode);
 
         $this->logger->error("Failed to generate a valid file for {$filePath} after {$this->maxFixRetries} attempts.");
         return null;
@@ -306,6 +314,7 @@ class AiTestGenerator
         $this->logger->debug('Raw generation output from model:', ['response' => $rawGeneratedOutput]);
         
         $generatedFilesArray = JsonCleaner::parse($rawGeneratedOutput);
+        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate.json", json_encode($generatedFilesArray, JSON_PRETTY_PRINT));
         
         $validatedFiles = [];
         // The AI response might be a single object or an array of objects. Standardize it.
@@ -325,9 +334,8 @@ class AiTestGenerator
 
         $this->logger->info('Successfully validated and fixed generation output.', ['file_count' => count($validatedFiles)]);
 
-        $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate.json";
-        file_put_contents($resultsPath, json_encode($validatedFiles, JSON_PRETTY_PRINT));
-        $this->logger->info('Generation results saved.', ['path' => $resultsPath]);
+        file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate-validated.json", json_encode($validatedFiles, JSON_PRETTY_PRINT));
+        $this->logger->info('Generation results saved.', ['path' => $this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate.json"]);
 
         return $validatedFiles;
     }
