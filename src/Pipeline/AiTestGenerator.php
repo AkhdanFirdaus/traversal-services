@@ -188,7 +188,7 @@ class AiTestGenerator
 
             $this->logger->warning("Validation failed for {$filePath}. Asking AI for a fix.", ['attempt' => $i, 'error' => $errorOutput]);
             
-            $fixPrompt = "Regenerate the test case to fix the issue. Usually syntax error.\nOutput from PHPUnit:```\n{$errorOutput}\n```";
+            $fixPrompt = "Regenerate the test case to fix the issue. Usually syntax error or unexpected string literal.\nOutput from PHPUnit:```\n{$errorOutput}\n```";
 
             $response = $chat->sendMessage($fixPrompt);
 
