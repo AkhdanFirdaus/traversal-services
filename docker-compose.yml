@@ -4,7 +4,7 @@ services:
     build: .
     command: ['php', '-S', "0.0.0.0:8080", "/app/main_server.php"]
     ports:
-      - "8080:8080"
+      - "5003:8080"
     volumes:
       - ./src:/app/src
       - ./logs:/app/logs

@@ -181,28 +181,8 @@ class AiTestGenerator
             $this->logger->warning("Validation failed for {$filePath}. Asking AI for a fix.", ['attempt' => $i, 'error' => $errorOutput]);
             
             // REVISED CONTEXT-AWARE FIX PROMPT
-            $analysisJson = json_encode($originalAnalysis);
-            $fixPrompt = <<<EOT
-The previously generated code for `{$filePath}` failed validation. This is a critical error.
-
-**Original Goal & Context:**
-Your original task was to generate code based on this analysis:
-```json
-{$analysisJson}
-```
-
-**The Code That Failed:**
-```php
-{$currentCode}
-```
-
-**PHPUnit Error Output:**
-```
-{$errorOutput}
-```
-
-Please analyze the original goal, the failed code, and the specific error message. Provide a corrected version of the JSON object for this file. Ensure the file path remains `{$filePath}` and the new code is syntactically correct, logically sound, and directly addresses the error. Do not apologize.
-EOT;
+            // $analysisJson = json_encode($originalAnalysis);
+            $fixPrompt = "The previously generated test failed with the following error. Please fix the code. Do not apologize, just provide the corrected JSON object.\n\nPHPUnit Output:\n```\n{$errorOutput}\n```";
 
             $response = $chat->sendMessage($fixPrompt);
 
