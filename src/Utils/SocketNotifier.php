@@ -8,13 +8,10 @@ use ElephantIO\Engine\SocketIO\Version4X;
 class SocketNotifier
 {
     private ?Client $client = null;
-    private Logger $logger;
 
-    public function __construct()
+    public function __construct(private Logger $logger, private string $roomName)
     {
-        $this->logger = new Logger();
         $this->initializeClient();
-        
     }
 
     private function initializeClient(): void
@@ -54,7 +51,7 @@ class SocketNotifier
                 'data' => $data
             ];
 
-            $this->client->emit('progress_update', $payload);
+            $this->client->emit($this->roomName, $payload);
         } catch (\Exception $e) {
             $this->logger->error("Failed to send Socket.IO update", [
                 'error' => $e->getMessage(),

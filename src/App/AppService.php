@@ -32,16 +32,16 @@ class AppService
         }
     }
 
-    public function handleProcessRepo(string $repoUrl, string $roomName): array
+    public function handleProcessRepo(string $gitUrl, string $roomName): array
     {
         try {
             // =================================================================
             // Step 1: Setup & Initial Baseline Run
             // =================================================================
             
-            $this->logger->info("Starting repository processing", ['repo' => $repoUrl, 'taskId' => $roomName]);
+            $this->logger->info("Starting repository processing", ['gitUrl' => $gitUrl, 'roomName' => $roomName]);
             
-            $cloner = new RepositoryCloner($repoUrl, $roomName);
+            $cloner = new RepositoryCloner($gitUrl, $roomName);
             $cloner->run();
 
             $projectDir = $cloner->getTempDirectory();
@@ -129,7 +129,7 @@ class AppService
             // // Return final results
             // $results = [
             //     'taskId' => $this->taskId,
-            //     'repoUrl' => $repoUrl,
+            //     'repoUrl' => $gitUrl,
             //     'vulnerabilities' => $vulnerabilities,
             //     'initialMsi' => $initialMsi,
             //     'finalMsi' => $finalMsi,

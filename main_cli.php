@@ -13,12 +13,14 @@ if ($argc < 2) {
 }
 
 $repoUrl = $argv[1];
+$roomName = uniqid();
+
 $logger = new Logger();
-$socket = new SocketNotifier($logger);
+$socket = new SocketNotifier($logger, $roomName);
 
 try {
     $app = new AppService($logger, $socket);
-    $results = $app->handleProcessRepo($repoUrl, uniqid());
+    $results = $app->handleProcessRepo($repoUrl, $roomName);
 } catch (\Throwable $th) {
     echo $th->getMessage();
     echo "\n";

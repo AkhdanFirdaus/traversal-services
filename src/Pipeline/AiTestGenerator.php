@@ -231,7 +231,7 @@ class AiTestGenerator
             $availableFilesContext .= "- PHPUnit Report: $reportPath\n";
         }
 
-        $this->logger->debug('Sending analysis prompt with initial context.', ['context' => $availableFilesContext]);
+        $this->logger->debug('Sending analysis prompt with initial context.', ['context' => "Project Structure Files, Patterns, Initial PHPUnit Report and mutation report"]);
 
         $chat = $this->client
             ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
