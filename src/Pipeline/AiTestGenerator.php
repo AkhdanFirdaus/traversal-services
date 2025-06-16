@@ -149,7 +149,7 @@ class AiTestGenerator
         );
     }
 
-    private function validateAndFixTest(array $generatedFileObject, ChatSession $chat, array $originalAnalysis): ?array
+    private function validateAndFixTest(array $generatedFileObject, ChatSession $chat): ?array
     {
         $currentCode = $generatedFileObject['code'];
         $filePath = $generatedFileObject['file_path'];
@@ -182,7 +182,7 @@ class AiTestGenerator
             
             // REVISED CONTEXT-AWARE FIX PROMPT
             // $analysisJson = json_encode($originalAnalysis);
-            $fixPrompt = "The previously generated test failed with the following error. Please fix the code. Do not apologize, just provide the corrected JSON object.\n\nPHPUnit Output:\n```\n{$errorOutput}\n```";
+            $fixPrompt = "Regenerate the test case to fix the issue without changing class name.\nOutput from PHPUnit:```\n{$errorOutput}\n```";
 
             $response = $chat->sendMessage($fixPrompt);
 
@@ -218,9 +218,9 @@ class AiTestGenerator
     /**
      * PHASE 1: Analyzes the system using function calling to identify vulnerable files.
      */
-    public function analyzeSystems(string $projectStructure, array $phpUnitReport, string $mutationReport, $iterate): array {
+    public function analyzeSystems(string $projectStructure, array $phpUnitReport, string $mutationReport): array {
 
-        $this->logger->info("Starting AiTestGenerator [Phase 1: Analysis] for iteration {$iterate}...");
+        $this->logger->info("Starting AiTestGenerator [Phase 1: Analysis]");
 
         $availableFilesContext = "The following files are available for analysis. Use the `get_file_content` tool to read them.\n\n";
         $availableFilesContext .= "- Project Structure: $projectStructure\n";
@@ -259,7 +259,7 @@ class AiTestGenerator
         $analysisArray = JsonCleaner::parse($rawAnalysisOutput);
         $this->logger->info('Successfully parsed analysis output.', ['result_count' => count($analysisArray)]);
         
-        $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR . "analyze-results-$iterate.json";
+        $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR . "analyze-results.json";
         file_put_contents($resultsPath, json_encode($analysisArray, JSON_PRETTY_PRINT));
 
         $this->logger->info('Analysis results saved.', ['path' => $resultsPath]);
@@ -267,21 +267,24 @@ class AiTestGenerator
         return $analysisArray;
     }
 
-    public function generateTestCase(array $analyzerResults, int $iterate): array
+    public function generateTestCase(string $instruction, string $context, string $target, int $iterate): array
     {
         $this->logger->info("Starting AiTestGenerator [Phase 2: Generation] for iteration {$iterate}...");
         
-        $analyzerResultsJson = json_encode($analyzerResults, JSON_PRETTY_PRINT);
-        $finalPrompt = PromptBuilder::generatorPrompt() . "\n\n# Analysis to Address:\n$analyzerResultsJson";
         $this->logger->debug('Sending generation prompt.');
 
         $chat = $this->client
             ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
             ->withGenerationConfig($this->getGenerationConfig())
             ->withTool($this->getAvailableTools())
-            ->startChat();
+            ->startChat(
+                history: [
+                    Content::parse(part: $instruction, role: Role::USER),
+                    Content::parse(part: $context, role: Role::USER),
+                ]
+            );
 
-        $response = $chat->sendMessage($finalPrompt);
+        $response = $chat->sendMessage($target);
         
         $turn = 1;
         while ($response->parts()[0]->functionCall !== null) {
@@ -304,7 +307,6 @@ class AiTestGenerator
         
         $generatedFilesArray = JsonCleaner::parse($rawGeneratedOutput);
         
-        // New validation step
         $validatedFiles = [];
         // The AI response might be a single object or an array of objects. Standardize it.
         if (isset($generatedFilesArray['file_path'])) {
@@ -313,7 +315,7 @@ class AiTestGenerator
 
         foreach ($generatedFilesArray as $fileObject) {
             // Pass the original analysis results to the validation loop to provide context for fixes.
-            $validatedObject = $this->validateAndFixTest($fileObject, $chat, $analyzerResults);
+            $validatedObject = $this->validateAndFixTest($fileObject, $chat);
             if ($validatedObject !== null) {
                 $validatedFiles[] = $validatedObject;
             } else {
@@ -328,23 +330,6 @@ class AiTestGenerator
         $this->logger->info('Generation results saved.', ['path' => $resultsPath]);
 
         return $validatedFiles;
-    }
-
-    private function handleEmptyResponse(GenerateContentResponse $response, string $context): void
-    {
-        $candidate = $response->candidates[0] ?? null;
-        $safetyRatings = $candidate?->safetyRatings ?? [];
-        $finishReason = $candidate?->finishReason?->value ?? 'UNKNOWN';
-        $ratingsArray = array_map(fn($rating) => $rating->toArray(), $safetyRatings);
-
-        $logContext = [
-            'context' => $context,
-            'finishReason' => $finishReason,
-            'safetyRatings' => $ratingsArray,
-        ];
-
-        $this->logger->error('Model response was empty. This is often caused by safety filters.', $logContext);
-        throw new \Exception('Model returned an empty response. The content may have been blocked by safety settings. Check logs for details.');
     }
 
     public function rewriteCode(array $generatedFilesArray): void

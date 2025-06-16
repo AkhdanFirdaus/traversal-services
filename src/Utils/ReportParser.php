@@ -14,6 +14,19 @@ class ReportParser
      * @return string A JSON-formatted string containing the summary.
      * @throws InvalidArgumentException if the JSON is invalid.
      */
+    public static function excludingKilled(string $reportJson): string
+    {
+        $data = json_decode($reportJson, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new InvalidArgumentException('Invalid JSON provided for mutation report. Error: ' . json_last_error_msg());
+        }
+
+        unset($data['killed']);
+
+        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
     public static function generateMutationSummary(string $reportJson, string $projectDir): string
     {
         $reportData = json_decode($reportJson, true);

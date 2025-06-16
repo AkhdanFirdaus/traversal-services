@@ -60,7 +60,7 @@ A raw JSON array `[{"file": "...", "reason": "...", "related_tests": ["...", ...
 EOT;
     }
 
-    public static function generatorPrompt()
+    public static function instruction()
     {
         // This prompt has been heavily revised to prevent runtime and logical errors.
          return <<<EOT
@@ -104,5 +104,28 @@ This is the most common point of failure. Follow these JSON formatting rules wit
 ### Example of the required **compact, single-line** format:
 `[{"file_path":"src/VulnFileRead.php","code":"<?php\\n\\nnamespace App;\\n\\n// Patched code..."},{"file_path":"tests/PatchedVulnFileReadTest.php","code":"<?php\\n\\nnamespace Tests;\\n\\nuse App\\\\VulnFileRead;\\nuse PHPUnit\\\\Framework\\\\TestCase;\\n\\n// Test for patch..."}]`
 EOT;
+    }
+
+    public static function generateContext(string $projectStructure, array $phpUnitReport, string $mutationReport): string {
+      $availableFilesContext = "The following files are available for analysis. Use the `get_file_content` tool to read them.\n\n";
+      $availableFilesContext .= "- Project Structure: $projectStructure\n";
+      $availableFilesContext .= "- Path Traversal Patterns: /patterns.json\n";
+      $availableFilesContext .= "- Mutation Report: $mutationReport\n";
+      
+      foreach ($phpUnitReport as $reportPath) {
+          $availableFilesContext .= "- PHPUnit Report: $reportPath\n";
+      }
+      return $availableFilesContext;
+    }
+
+    public static function generateTarget(array $specificAnalysis): string {
+      $path = $specificAnalysis['path'];
+      $reason = $specificAnalysis['reason'];
+      $details = json_encode($specificAnalysis['details'], JSON_PRETTY_PRINT);
+      
+      $target = "Content of `$path`";
+      $target .= "---\nReason for generating the test case:\n$reason";
+      $target .= "---\nDetail Mutation:\n$details";
+      return $target;
     }
 }

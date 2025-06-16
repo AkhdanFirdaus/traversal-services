@@ -11,6 +11,7 @@ use Utils\SocketNotifier;
 use Dotenv\Dotenv;
 use Pipeline\PhpUnitRunner;
 use Utils\FileHelper;
+use Utils\PromptBuilder;
 use Utils\ReportParser;
 
 class AppService
@@ -51,48 +52,67 @@ class AppService
                 mkdir($outputDir, 0755, true);
             }
 
+            $phpUnitRunner = new PhpUnitRunner(
+                $projectDir, 
+                'tests', 
+                $outputDir,
+                $this->logger,
+            );
+
+            $initialUnit = $phpUnitRunner->run();
+            $phpUnitRunner->saveReport('phpunit-initial.json');
+
             $infectionRunner = new InfectionRunner($projectDir, 'tests', $outputDir, $this->logger);
             
-            // Run Infection ONCE to get our master "to-do list"
             $this->logger->info("Establishing initial project baseline with a single Infection run...");
             $initialMutationReportContent = $infectionRunner->run();
-            $infectionRunner->saveReport('msi-initial.json');
+            $infectionRunner->saveReport('msi-original.json');
+            $infectionRunner->saveReport('msi-initial.json', 'summary');
             $this->logger->info("Initial baseline established.");
 
-            // Parse the report to get a structured list of targets
-            $initialReportSummary = ReportParser::generateMutationSummary($initialMutationReportContent, $projectDir);
-            $analysisTargets = json_decode($initialReportSummary, true)['survivingMutantsByFile'] ?? [];
+            $msiReportWithoutKilled = ReportParser::excludingKilled($initialMutationReportContent);
+            $msiReportInitialSummary = ReportParser::generateMutationSummary($initialMutationReportContent, $projectDir);
+            $analysisTargets = json_decode($msiReportInitialSummary, true)['survivingMutantsByFile'] ?? [];
 
             if (empty($analysisTargets)) {
                 $this->logger->info("No surviving mutants found in the initial report. Nothing to do. Exiting.");
-                // You can add final export logic here if needed
                 return [];
             }
 
             // =================================================================
-            // Step 2: Simplified "MSI-Oriented" Generation Loop
+            // Step 2: "MSI-Oriented" Generation Loop
             // =================================================================
             $generator = new AiTestGenerator($projectDir, $outputDir, $this->logger);
-            
+
+            $projectStructure = FileHelper::getProjectStructure($this->logger, $projectDir, $outputDir);
+
             $iteration = 1;
-            // Loop through each file that has surviving mutants
             foreach (array_keys($analysisTargets) as $fileToFix) {
                 $this->logger->info("Starting AI Generation Iteration #{$iteration}", [
                     'target_file' => $fileToFix
                 ]);
 
                 try {
-                    // Create a highly specific analysis result for the generator
-                    $specificAnalysis = [[
+                    $specificAnalysis = [
                         'file' => $fileToFix,
                         'reason' => 'This file has surviving mutants that need to be killed.',
                         'details' => $analysisTargets[$fileToFix] // Provide specific mutant details
-                    ]];
+                    ];
 
-                    // Generate AND self-validate code for this specific target.
-                    // This method now contains the internal "test-and-fix" loop.
+                    $instruction = PromptBuilder::instruction();
+
+                    $context = PromptBuilder::generateContext(
+                        $projectStructure,
+                        $initialUnit,
+                        $msiReportWithoutKilled,
+                    );
+                    
+                    $target = PromptBuilder::generateTarget($specificAnalysis);
+                    
                     $generatedFiles = $generator->generateTestCase(
-                        $specificAnalysis,
+                        $instruction,
+                        $context,
+                        $target,
                         $iteration
                     );
                     
@@ -119,7 +139,7 @@ class AppService
             // =================================================================
             $this->logger->info("All generation attempts are complete. Running final validation...");
             $finalMutationReportContent = $infectionRunner->run();
-            $infectionRunner->saveReport('msi-final.json');
+            $infectionRunner->saveReport('msi-final.json', 'summary');
             $this->logger->info("Final MSI score calculated.");
 
             $exportPath = $projectDir . DIRECTORY_SEPARATOR . 'tests';

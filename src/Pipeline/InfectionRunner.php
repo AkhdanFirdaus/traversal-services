@@ -52,9 +52,20 @@ class InfectionRunner
         return $this->projectDir . '/outputs/infection-report.json';
     }
 
-    public function saveReport($filename): void
+    public function saveReport($filename, $mode = ''): void
     {
-        $report = ReportParser::generateMutationSummary($this->content, $this->projectDir);
+        $report = '';
+        switch ($mode) {
+            case 'summary':
+                $report = ReportParser::generateMutationSummary($this->content, $this->projectDir);
+                break;
+            case 'exclude-killed':
+                $report = ReportParser::excludingKilled($this->content);
+                break;
+            default:
+                $report = $this->content;
+                break;
+        }
         file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . $filename, $report);
     }
 } 
