@@ -70,6 +70,8 @@ class AppService
             $infectionRunner->saveReport('msi-original.json');
             $infectionRunner->saveReport('msi-initial.json', 'summary');
             $this->logger->info("Initial baseline established.");
+            
+            $this->notifier->sendUpdate("Initial baseline established.", 30);
 
             $msiReportWithoutKilled = ReportParser::excludingKilled($initialMutationReportContent);
             $msiReportInitialSummary = ReportParser::generateMutationSummary($initialMutationReportContent, $projectDir);
@@ -93,6 +95,10 @@ class AppService
                     'target_file' => $fileToFix
                 ]);
 
+                $this->notifier->sendUpdate("Starting AI Generation Iteration #{$iteration}", 40, [
+                    'target_file' => $fileToFix
+                ]);
+                
                 try {
                     $specificAnalysis = [
                         'file' => $fileToFix,
@@ -138,6 +144,7 @@ class AppService
             // =================================================================
             // Step 3: Final Validation and Export
             // =================================================================
+            $this->notifier->sendUpdate("All generation attempts are complete. Running final validation...", 80);
             $this->logger->info("All generation attempts are complete. Running final validation...");
             $finalMutationReportContent = $infectionRunner->run();
             $infectionRunner->saveReport('msi-final.json', 'summary');
@@ -154,14 +161,16 @@ class AppService
 
             $this->logger->info("Repository processing completed successfully", $results);
             $this->notifier->sendUpdate("Processing completed", 100, $results);
-
+            
             return $results;
-
+            
         } catch (\Exception $e) {
-            $this->logger->error("Error processing repository", [
+            $errorRes = [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
-            ]);
+            ];
+            $this->logger->error("Error processing repository", $errorRes);
+            $this->notifier->sendUpdate("Processing Failed", 100, $errorRes);
             throw $e;
         } finally {
             $cloner->deleteTempDirectory();

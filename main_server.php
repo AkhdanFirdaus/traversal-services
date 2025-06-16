@@ -9,6 +9,9 @@ use Utils\SocketNotifier;
 // Set environment for API mode
 $_ENV['APP_ENV'] = 'api';
 
+// Basic CORS headers
+header('Access-Control-Allow-Origin: *');
+
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 
@@ -100,8 +103,6 @@ switch ($requestUri) {
         ]);
         break;
     case '/process':
-        // Basic CORS headers
-        header('Access-Control-Allow-Origin: *');
         header('Content-Type: application/json');
         header('Access-Control-Allow-Methods: POST');
         header('Access-Control-Allow-Headers: Content-Type');

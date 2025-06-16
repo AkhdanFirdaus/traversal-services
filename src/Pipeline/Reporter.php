@@ -60,6 +60,6 @@ class Reporter
     }
 
     public function save(string $outputDir, array $report, string $filename) {
-        file_put_contents($outputDir . DIRECTORY_SEPARATOR . $filename, $report);
+        file_put_contents($outputDir . DIRECTORY_SEPARATOR . $filename, json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 } 
