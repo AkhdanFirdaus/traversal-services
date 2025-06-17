@@ -165,6 +165,7 @@ class AppService
 
             $this->logger->info("Repository processing completed successfully", $results);
             $this->notifier->sendUpdate("Processing completed", 100, $results);
+            $this->notifier->disconnect();
             
             return $results;
             
@@ -175,6 +176,7 @@ class AppService
             ];
             $this->logger->error("Error processing repository", $errorRes);
             $this->notifier->sendUpdate("Processing Failed", 100, $errorRes);
+            $this->notifier->disconnect();
             throw $e;
         } finally {
             $cloner->deleteTempDirectory();

@@ -61,16 +61,27 @@ class SocketNotifier
         }
     }
 
-    public function __destruct()
+    public function disconnect(): void
     {
-        if ($this->client !== null) {
-            try {
-                $this->client->disconnect();
-            } catch (\Exception $e) {
-                $this->logger->error("Failed to close Socket.IO connection", [
-                    'error' => $e->getMessage()
-                ]);
-            }
+        try {
+            $this->client->disconnect();
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to disconnect Socket.IO client", [
+                'error' => $e->getMessage()
+            ]);
         }
     }
+
+    // public function __destruct()
+    // {
+    //     if ($this->client !== null) {
+    //         try {
+    //             $this->client->disconnect();
+    //         } catch (\Exception $e) {
+    //             $this->logger->error("Failed to close Socket.IO connection", [
+    //                 'error' => $e->getMessage()
+    //             ]);
+    //         }
+    //     }
+    // }
 } 
