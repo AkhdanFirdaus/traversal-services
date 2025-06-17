@@ -65,6 +65,7 @@ class SocketNotifier
     {
         try {
             $this->client->disconnect();
+            $this->logger->info("Destructor called: closing packet connection");
         } catch (\Exception $e) {
             $this->logger->error("Failed to disconnect Socket.IO client", [
                 'error' => $e->getMessage()
