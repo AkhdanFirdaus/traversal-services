@@ -42,6 +42,7 @@ class AppService
             // =================================================================
             
             $this->logger->info("Starting repository processing", ['gitUrl' => $gitUrl, 'roomName' => $roomName]);
+            $this->notifier->sendUpdate("Starting repository processing", 5, ['gitUrl' => $gitUrl, 'roomName' => $roomName]);
             
             $cloner = new RepositoryCloner($gitUrl, $roomName);
             $cloner->run();
@@ -60,9 +61,11 @@ class AppService
                 $this->logger,
             );
 
+            $this->notifier->sendUpdate("Running PHP Unit.", 10);
             $initialUnit = $phpUnitRunner->run();
             $phpUnitRunner->saveReport('phpunit-initial.json');
-
+            
+            $this->notifier->sendUpdate("Running Initial Infection.", 20);
             $infectionRunner = new InfectionRunner($projectDir, 'tests', $outputDir, $this->logger);
             
             $this->logger->info("Establishing initial project baseline with a single Infection run...");
@@ -79,13 +82,14 @@ class AppService
 
             if (empty($analysisTargets)) {
                 $this->logger->info("No surviving mutants found in the initial report. Nothing to do. Exiting.");
+                $this->notifier->sendUpdate("No surviving mutants found in the initial report. Nothing to do. Exiting.", 100);
                 return [];
             }
 
             // =================================================================
             // Step 2: "MSI-Oriented" Generation Loop
             // =================================================================
-            $generator = new AiTestGenerator($projectDir, $outputDir, $this->logger);
+            $generator = new AiTestGenerator($projectDir, $outputDir, $this->logger, $this->notifier);
 
             $projectStructure = FileHelper::getProjectStructure($this->logger, $projectDir, $outputDir);
 
@@ -95,9 +99,7 @@ class AppService
                     'target_file' => $fileToFix
                 ]);
 
-                $this->notifier->sendUpdate("Starting AI Generation Iteration #{$iteration}", 40, [
-                    'target_file' => $fileToFix
-                ]);
+                $this->notifier->sendUpdate("Starting AI Generation Iteration #{$iteration}", 40, ['target_file' => $fileToFix]);
                 
                 try {
                     $specificAnalysis = [
@@ -127,8 +129,9 @@ class AppService
                         $this->logger->warning("Generation phase produced no valid files for {$fileToFix}. Proceeding to next target.");
                         continue;
                     }
-
+                    
                     // Integrate the validated files into the project
+                    $this->notifier->sendUpdate("Rewriting Code.", 80);
                     $generator->rewriteCode($generatedFiles);
                     
                 } catch (\Throwable $th) {
@@ -144,11 +147,12 @@ class AppService
             // =================================================================
             // Step 3: Final Validation and Export
             // =================================================================
-            $this->notifier->sendUpdate("All generation attempts are complete. Running final validation...", 80);
+            $this->notifier->sendUpdate("All generation attempts are complete. Running final validation...", 85);
             $this->logger->info("All generation attempts are complete. Running final validation...");
             $finalMutationReportContent = $infectionRunner->run();
             $infectionRunner->saveReport('msi-final.json', 'summary');
             $this->logger->info("Final MSI score calculated.");
+            $this->notifier->sendUpdate("Final MSI score calculated", 95);
 
             $exportPath = $projectDir . DIRECTORY_SEPARATOR . 'tests';
             $exporter = new Exporter($this->logger, $this->notifier, $exportPath, $outputDir);

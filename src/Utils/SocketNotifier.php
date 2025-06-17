@@ -45,13 +45,14 @@ class SocketNotifier
 
         try {
             $payload = [
+                'room_name' => $this->roomName,
                 'message' => $message,
                 'progress' => $progress,
                 'timestamp' => time(),
                 'data' => $data
             ];
 
-            $this->client->emit($this->roomName, $payload);
+            $this->client->emit('engine_update', $payload);
         } catch (\Exception $e) {
             $this->logger->error("Failed to send Socket.IO update", [
                 'error' => $e->getMessage(),

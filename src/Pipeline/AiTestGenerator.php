@@ -21,15 +21,20 @@ use Utils\FileHelper;
 use Utils\JsonCleaner;
 use Utils\Logger;
 use Utils\PromptBuilder;
+use Utils\SocketNotifier;
 
 class AiTestGenerator
 {
     private Client $client;
     private int $maxFixRetries = 5;
 
-    public function __construct(private string $projectDir, private string $outputDir, private Logger $logger) {
+    public function __construct(private string $projectDir, private string $outputDir, private Logger $logger, private SocketNotifier $notifier) {
         $this->client = Gemini::client($_ENV['GEMINI_API_KEY']);
         $this->logger->info('AiTestGenerator initialized.', [
+            'projectDir' => $this->projectDir,
+            'outputDir' => $this->outputDir
+        ]);
+        $this->notifier->sendUpdate('AiTestGenerator initialized.', 50, [
             'projectDir' => $this->projectDir,
             'outputDir' => $this->outputDir
         ]);
@@ -77,6 +82,7 @@ class AiTestGenerator
     private function executeGetFileContent(string $filePath): string
     {
         $this->logger->info('Executing tool: get_file_content', ['requested_path' => $filePath]);
+        $this->notifier->sendUpdate('Executing tool: get_file_content', 60, ['requested_path' => $filePath]);
         
         if (str_starts_with($filePath, '/')) {
             $fullPath = $filePath;
@@ -111,6 +117,7 @@ class AiTestGenerator
     private function executeListDirectoryContents(string $path): array
     {
         $this->logger->info('Executing tool: list_directory_contents', ['requested_path' => $path]);
+        $this->notifier->sendUpdate('Executing tool: list_directory_contents', 60, ['requested_path' => $path]);
         $fullPath = $this->projectDir . DIRECTORY_SEPARATOR . $path;
         
         if (!is_dir($fullPath)) {
@@ -132,6 +139,7 @@ class AiTestGenerator
         $functionName = $functionCall->name;
         $args = $functionCall->args;
         $this->logger->info('Model requested function call.', ['name' => $functionName, 'args' => $args]);
+        $this->notifier->sendUpdate('Model requested function call.', 60, ['name' => $functionName, 'args' => $args]);
 
         $result = match ($functionName) {
             'get_file_content' => ['content' => $this->executeGetFileContent($args['file_path'])],
@@ -163,6 +171,9 @@ class AiTestGenerator
             $this->logger->info("Validating generated file (Attempt {$i}/{$this->maxFixRetries})", [
                 'file' => $filePath,
             ]);
+            $this->notifier->sendUpdate("Validating generated file (Attempt {$i}/{$this->maxFixRetries})", 60, [
+                'file' => $filePath,
+            ]);
 
             $process = new Process([
                 'vendor/bin/phpunit', 
@@ -175,6 +186,7 @@ class AiTestGenerator
 
             if ($process->isSuccessful()) {
                 $this->logger->info("Validation successful for {$filePath}.");
+                $this->notifier->sendUpdate("Validation successful for {$filePath}.", 70);
                 $generatedFileObject['code'] = $currentCode;
                 return $generatedFileObject;
             }
@@ -229,6 +241,7 @@ class AiTestGenerator
     public function analyzeSystems(string $projectStructure, array $phpUnitReport, string $mutationReport): array {
 
         $this->logger->info("Starting AiTestGenerator [Phase 1: Analysis]");
+        $this->notifier->sendUpdate("Starting AiTestGenerator [Phase 1: Analysis]", 40);
 
         $availableFilesContext = "The following files are available for analysis. Use the `get_file_content` tool to read them.\n\n";
         $availableFilesContext .= "- Project Structure: $projectStructure\n";
@@ -254,6 +267,7 @@ class AiTestGenerator
         $turn = 1;
         while ($response->parts()[0]->functionCall !== null) {
             $this->logger->info("Entering analysis function call loop, turn #{$turn}.");
+            $this->notifier->sendUpdate("Entering analysis function call loop, turn #{$turn}.", 60);
             $functionCall = $response->parts()[0]->functionCall;
             $functionResponseContent = $this->handleFunctionCall($functionCall);
             $response = $chat->sendMessage($functionResponseContent);
@@ -261,16 +275,19 @@ class AiTestGenerator
         }
 
         $this->logger->info('Received final analysis from the model.');
+        $this->notifier->sendUpdate('Received final analysis from the model.', 60);
         $rawAnalysisOutput = $response->text();
         $this->logger->debug('Raw analysis output from model:', ['response' => $rawAnalysisOutput]);
 
         $analysisArray = JsonCleaner::parse($rawAnalysisOutput);
         $this->logger->info('Successfully parsed analysis output.', ['result_count' => count($analysisArray)]);
+        $this->notifier->sendUpdate('Successfully parsed analysis output.', 60, ['result_count' => count($analysisArray)]);
         
         $resultsPath = $this->outputDir . DIRECTORY_SEPARATOR . "analyze-results.json";
         file_put_contents($resultsPath, json_encode($analysisArray, JSON_PRETTY_PRINT));
 
         $this->logger->info('Analysis results saved.', ['path' => $resultsPath]);
+        $this->notifier->sendUpdate('Analysis results saved.', 60, ['path' => $resultsPath]);
 
         return $analysisArray;
     }
@@ -278,6 +295,7 @@ class AiTestGenerator
     public function generateTestCase(string $instruction, string $context, string $target, int $iterate): array
     {
         $this->logger->info("Starting AiTestGenerator [Phase 2: Generation] for iteration {$iterate}...");
+        $this->notifier->sendUpdate("Starting AiTestGenerator [Phase 2: Generation] for iteration {$iterate}...", 60);
         
         $this->logger->debug('Sending generation prompt.');
 
@@ -297,6 +315,7 @@ class AiTestGenerator
         $turn = 1;
         while ($response->parts()[0]->functionCall !== null) {
             $this->logger->info("Entering generation function call loop, turn #{$turn}.");
+            $this->notifier->sendUpdate("Entering generation function call loop, turn #{$turn}.", 60);
             $functionCall = $response->parts()[0]->functionCall;
             $functionResponseContent = $this->handleFunctionCall($functionCall);
             $response = $chat->sendMessage($functionResponseContent);
@@ -304,6 +323,7 @@ class AiTestGenerator
         }
 
         $this->logger->info('Received initial generated file(s) from the model.');
+        $this->notifier->sendUpdate('Received initial generated file(s) from the model.', 60);
 
         if (empty($response->parts())) {
             // Handle safety-blocked responses
@@ -333,9 +353,11 @@ class AiTestGenerator
         }
 
         $this->logger->info('Successfully validated and fixed generation output.', ['file_count' => count($validatedFiles)]);
+        $this->notifier->sendUpdate('Successfully validated and fixed generation output.', 60, ['file_count' => count($validatedFiles)]);
 
         file_put_contents($this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate-validated.json", json_encode($validatedFiles, JSON_PRETTY_PRINT));
         $this->logger->info('Generation results saved.', ['path' => $this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate.json"]);
+        $this->notifier->sendUpdate('Generation results saved.', 60, ['path' => $this->outputDir . DIRECTORY_SEPARATOR . "generated-results-$iterate.json"]);
 
         return $validatedFiles;
     }
@@ -343,6 +365,7 @@ class AiTestGenerator
     public function rewriteCode(array $generatedFilesArray): void
     {
         $this->logger->info('Rewriting code with generated files...', ['file_count' => count($generatedFilesArray)]);
+        $this->notifier->sendUpdate('Rewriting code with generated files...', 60, ['file_count' => count($generatedFilesArray)]);
 
         if (empty($generatedFilesArray)) {
              $this->logger->warning("No valid files were generated or fixed, so no files will be written.");
@@ -357,6 +380,7 @@ class AiTestGenerator
 
             $dest = $this->projectDir . DIRECTORY_SEPARATOR . $fileObject['file_path'];
             $this->logger->info('Writing generated file.', ['path' => $dest]);
+            $this->notifier->sendUpdate('Writing generated file.', 60, ['path' => $dest]);
 
             $dir = dirname($dest);
             if (!is_dir($dir)) {
@@ -367,5 +391,6 @@ class AiTestGenerator
         }
 
         $this->logger->info('Finished rewriting all generated files.');
+        $this->notifier->sendUpdate('Finished rewriting all generated files.', 70);
     }
 } 
