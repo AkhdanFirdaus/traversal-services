@@ -1,14 +1,7 @@
-engine/tmp
-engine/reports
-engine/vendor
-engine/*lock.json
-
-socket/node_modules
-socket/*lock.json
-
-materials
+outputs
+vendor
 logs
-reports
 tmp
 
+*lock.json
 .env

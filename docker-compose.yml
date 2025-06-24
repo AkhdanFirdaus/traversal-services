@@ -1,14 +1,15 @@
 services:
   engine:
     container_name: traversal-engine
-    build: ./engine
-    command: ['php', '-S', "0.0.0.0:8080", "/app/public/server.php"]
+    build: .
+    command: ['php', '-S', "0.0.0.0:8080", "/app/main_server.php"]
     ports:
-      - "8080:8080"
+      - "5003:8080"
     volumes:
-      - ./engine:/app
-      - ./reports/engine:/app/reports
-      - ./tmp:/app/tmp
+      - ./src:/app/src
+      - ./logs:/app/logs
+      - ./outputs:/app/outputs
+      - ./tmp:/tmp
     env_file:
       - .env
     environment:
@@ -16,20 +17,6 @@ services:
       - TZ=Asia/Jakarta
     depends_on:
       - socket
-    networks:
-      - traversal
-
-  socket:
-    container_name: traversal-socket
-    build: ./socket
-    volumes:
-      - ./socket:/app
-      - ./reports/socket:/app/logs
-    ports:
-      - "3000:3000"
-    environment:
-      - APP_ENV=development
-      - TZ=Asia/Jakarta
     networks:
       - traversal
 

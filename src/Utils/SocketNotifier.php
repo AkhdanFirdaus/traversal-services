@@ -8,11 +8,9 @@ use ElephantIO\Engine\SocketIO\Version4X;
 class SocketNotifier
 {
     private ?Client $client = null;
-    private Logger $logger;
 
-    public function __construct()
+    public function __construct(private Logger $logger, private string $roomName)
     {
-        $this->logger = new Logger();
         $this->initializeClient();
     }
 
@@ -47,13 +45,14 @@ class SocketNotifier
 
         try {
             $payload = [
+                'room_name' => $this->roomName,
                 'message' => $message,
                 'progress' => $progress,
                 'timestamp' => time(),
                 'data' => $data
             ];
 
-            $this->client->emit('progress_update', $payload);
+            $this->client->emit('engine_update', $payload);
         } catch (\Exception $e) {
             $this->logger->error("Failed to send Socket.IO update", [
                 'error' => $e->getMessage(),
@@ -62,16 +61,28 @@ class SocketNotifier
         }
     }
 
-    public function __destruct()
+    public function disconnect(): void
     {
-        if ($this->client !== null) {
-            try {
-                $this->client->disconnect();
-            } catch (\Exception $e) {
-                $this->logger->error("Failed to close Socket.IO connection", [
-                    'error' => $e->getMessage()
-                ]);
-            }
+        try {
+            $this->client->disconnect();
+            $this->logger->info("Destructor called: closing packet connection");
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to disconnect Socket.IO client", [
+                'error' => $e->getMessage()
+            ]);
         }
     }
+
+    // public function __destruct()
+    // {
+    //     if ($this->client !== null) {
+    //         try {
+    //             $this->client->disconnect();
+    //         } catch (\Exception $e) {
+    //             $this->logger->error("Failed to close Socket.IO connection", [
+    //                 'error' => $e->getMessage()
+    //             ]);
+    //         }
+    //     }
+    // }
 } 

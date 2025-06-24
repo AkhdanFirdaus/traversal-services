@@ -1,4 +1,6 @@
-FROM php:8.2-cli
+FROM php:8.2-fpm
+
+ENV TZ=Asia/Jakarta
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -30,13 +32,8 @@ COPY . .
 RUN composer dump-autoload --optimize
 
 # Create necessary directories with proper permissions
-RUN mkdir -p /app/tmp/clones_cli /app/tmp/clones_api \
-    /app/reports/heuristic_analysis /app/reports/msi_reports \
-    /app/reports/exported_test_cases_cli /app/reports/exported_test_cases_api \
-    && chmod -R 777 /app/tmp /app/reports
+RUN mkdir -p /app/logs/ /app/outputs/ 
+RUN chmod -R 777 /app/logs /app/outputs
 
 # Set environment variables
 ENV APP_ENV=production
-
-# Command to run the application
-CMD ["php", "bin/run.php"] 

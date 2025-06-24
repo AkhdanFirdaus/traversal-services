@@ -12,10 +12,7 @@ class Logger extends AbstractLogger implements LoggerInterface
 
     public function __construct()
     {
-        $this->logFile = $_ENV['APP_ENV'] === 'api' 
-            ? $_ENV['API_LOG_FILE'] 
-            : __DIR__ . '/../../' . $_ENV['CLI_LOG_FILE'];
-        
+        $this->logFile = '/app/logs/app.log';
         $this->ensureLogDirectoryExists();
     }
 
