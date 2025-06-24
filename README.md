@@ -11,7 +11,7 @@ Deskripsi dan Kerangka Proyek Generator Test Case PHP
 Directory/Path Traversal
 
 ## Deskripsi Proyek
-Sistem ini adalah sebuah engine komprehensif yang dirancang untuk menganalisis proyek PHP, mendeteksi potensi kerentanan keamanan (dengan fokus awal pada Path Traversal dan Directory Traversal), dan kemudian secara otomatis menghasilkan serta meningkatkan test case menggunakan berbagai model kecerdasan buatan (Large Language Model - LLM), termasuk Google Gemini, Anthropic Claude, dan OpenAI GPT. Tujuan utamanya adalah untuk meningkatkan kualitas dan cakupan pengujian keamanan pada aplikasi PHP dengan memanfaatkan kekuatan dari beberapa LLM terkemuka, serta memberikan pemantauan proses secara real-time melalui Socket.IO.
+Sistem ini adalah sebuah engine komprehensif yang dirancang untuk menganalisis proyek PHP, mendeteksi potensi kerentanan keamanan (dengan fokus awal pada Path Traversal dan Directory Traversal), dan kemudian secara otomatis menghasilkan serta meningkatkan test case menggunakan model kecerdasan buatan (Large Language Model - LLM), Google Gemini. Tujuan utamanya adalah untuk meningkatkan kualitas dan cakupan pengujian keamanan pada aplikasi PHP dengan memanfaatkan kekuatan dari beberapa LLM terkemuka, serta memberikan pemantauan proses secara real-time melalui Socket.IO.
 
 ## Fitur Utama:
 1. Kloning Repositori: Mengkloning repositori PHP target dari URL Git.
