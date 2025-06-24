@@ -1,4 +1,14 @@
+# Proyek Penelitian Terapan
 Deskripsi dan Kerangka Proyek Generator Test Case PHP
+
+## Kelompok 3
+- M. Fajri Davyza Chaniago - 23524010
+- Ziadan Qowi - 23524019
+- Akhdan Musyaffa Firdaus - 23524039
+- Yogie Anugrah Ramadhan - 23524049
+
+## Topik
+Directory/Path Traversal
 
 ## Deskripsi Proyek
 Sistem ini adalah sebuah engine komprehensif yang dirancang untuk menganalisis proyek PHP, mendeteksi potensi kerentanan keamanan (dengan fokus awal pada Path Traversal dan Directory Traversal), dan kemudian secara otomatis menghasilkan serta meningkatkan test case menggunakan berbagai model kecerdasan buatan (Large Language Model - LLM), termasuk Google Gemini, Anthropic Claude, dan OpenAI GPT. Tujuan utamanya adalah untuk meningkatkan kualitas dan cakupan pengujian keamanan pada aplikasi PHP dengan memanfaatkan kekuatan dari beberapa LLM terkemuka, serta memberikan pemantauan proses secara real-time melalui Socket.IO.
