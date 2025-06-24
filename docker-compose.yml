@@ -15,8 +15,6 @@ services:
     environment:
       - XDEBUG_MODE=coverage,debug
       - TZ=Asia/Jakarta
-    depends_on:
-      - socket
     networks:
       - traversal
 

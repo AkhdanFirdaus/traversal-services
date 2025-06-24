@@ -52,7 +52,7 @@ class SocketNotifier
                 'data' => $data
             ];
 
-            $this->client->emit('engine_update', $payload);
+            $this->client->emit('engine-update', $payload);
         } catch (\Exception $e) {
             $this->logger->error("Failed to send Socket.IO update", [
                 'error' => $e->getMessage(),

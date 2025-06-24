@@ -34,9 +34,6 @@ Sistem ini adalah sebuah engine komprehensif yang dirancang untuk menganalisis p
 ```
 project-root/
 │
-├── bin/                      # Skrip CLI
-│   └── run.php
-│
 ├── public/                   # Root untuk akses web (API)
 │   └── server.php
 │
@@ -45,29 +42,23 @@ project-root/
 │   │   └── AppService.php      # Layanan inti aplikasi
 │   │
 │   ├── Pipeline/             # Tahapan dalam pipeline pemrosesan
-│   │   ├── RepositoryCloner.php
-│   │   ├── HeuristicAnalyzer.php
-│   │   ├── InfectionRunner.php   # Telah diperbarui secara signifikan
 │   │   ├── AiTestGenerator.php
-│   │   ├── TestSelector.php
 │   │   └── Exporter.php
-│   │
-│   ├── AST/                    # Komponen terkait Abstract Syntax Tree
-│   │   ├── TraversalVisitor.php
-│   │   ├── HeuristicRule.php
-│   │   ├── VulnerabilityLocation.php
-│   │   └── Rules/                # Implementasi aturan heuristik
-│   │       ├── CWE22_DirectUserInputInSinkRule.php
-│   │       ├── CWE22_ConcatenatedPathWithUserInputRule.php
-│   │       └── GenericPatternRule.php
+│   │   ├── InfectionRunner.php
+│   │   ├── PhpUnitRunner.php
+│   │   ├── RepositoryCloner.php
 │   │
 │   └── Utils/                  # Utilitas pendukung
+│       ├── ConfigInfection.php
+│       ├── ConfigPHPUnit.php
 │       ├── FileHelper.php
-│       ├── Logger.php            # Logger PSR-3 compliant
-│       ├── PatternLoader.php
+│       ├── Logger.php            
+│       ├── PromptBuilder.php
+│       ├── ReportParser.php
+│       ├── JsonCleaner.php
 │       └── SocketNotifier.php    # Notifikasi via Socket.IO
 │
-├── config/                   # File konfigurasi
+├── config/                     # File konfigurasi
 │   ├── patterns.json           # Pola kerentanan kustom
 │   └── infection.json5.dist    # Template konfigurasi Infection (format JSON5)
 │
@@ -77,20 +68,19 @@ project-root/
 │   ├── app_cli.log
 │   └── api.log
 │
-├── reports/                    # Laporan yang dihasilkan
-│   ├── heuristic_analysis/
-│   ├── msi_reports/
-│   └── exported_test_cases_cli/
-│   └── exported_test_cases_api/
+├── outputs/                    # Laporan yang dihasilkan
+│   ├── <roomid>/
 │
 ├── vendor/                     # Dependensi Composer
 │
 ├── .env                        # File environment (konfigurasi sensitif, jangan di-commit)
-├── .env.example                # Contoh file environment
+├── env_example                # Contoh file environment
 ├── composer.json               # Definisi dependensi dan autoloading
 ├── composer.lock               # Versi dependensi yang terkunci
 ├── Dockerfile                  # Instruksi build image Docker
 ├── docker-compose.yml          # Konfigurasi layanan Docker Compose
+├── main_cli.yml                # Script utama CLI
+├── main_server.yml             # Script utama REST Api server
 └── README.md                   # Dokumentasi proyek
 ```
 

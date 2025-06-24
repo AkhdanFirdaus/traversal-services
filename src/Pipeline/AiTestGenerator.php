@@ -255,7 +255,7 @@ class AiTestGenerator
         $this->logger->debug('Sending analysis prompt with initial context.', ['context' => "Project Structure Files, Patterns, Initial PHPUnit Report and mutation report"]);
 
         $chat = $this->client
-            ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
+            ->generativeModel(model: $_ENV['GEMINI_MODEL_NAME'])
             ->withGenerationConfig($this->getGenerationConfig())
             ->withTool($this->getAvailableTools())
             ->startChat(history: [
@@ -300,7 +300,7 @@ class AiTestGenerator
         $this->logger->debug('Sending generation prompt.');
 
         $chat = $this->client
-            ->generativeModel(model: 'gemini-2.5-flash-preview-05-20')
+            ->generativeModel(model: $_ENV['GEMINI_MODEL_NAME'])
             ->withGenerationConfig($this->getGenerationConfig())
             ->withTool($this->getAvailableTools())
             ->startChat(

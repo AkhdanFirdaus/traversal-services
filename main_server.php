@@ -11,6 +11,9 @@ $_ENV['APP_ENV'] = 'api';
 
 // Basic CORS headers
 header('Access-Control-Allow-Origin: *');
+header('Content-Type: application/json');
+header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
 
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $requestMethod = $_SERVER['REQUEST_METHOD'];
@@ -103,9 +106,10 @@ switch ($requestUri) {
         ]);
         break;
     case '/process':
-        header('Content-Type: application/json');
-        header('Access-Control-Allow-Methods: POST');
-        header('Access-Control-Allow-Headers: Content-Type');
+        if ($requestMethod === 'OPTIONS') {
+            http_response_code(200);
+            exit();
+        }
 
         if ($requestMethod !== 'POST') {
             http_response_code(405);
