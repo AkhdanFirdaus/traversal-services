@@ -43,7 +43,7 @@ project-root/
 │   │
 │   ├── Pipeline/             # Tahapan dalam pipeline pemrosesan
 │   │   ├── AiTestGenerator.php
-│   │   └── Exporter.php
+│   │   └── Reporter.php
 │   │   ├── InfectionRunner.php
 │   │   ├── PhpUnitRunner.php
 │   │   ├── RepositoryCloner.php
@@ -52,11 +52,10 @@ project-root/
 │       ├── ConfigInfection.php
 │       ├── ConfigPHPUnit.php
 │       ├── FileHelper.php
-│       ├── Logger.php            
+│       ├── Logger.php          # Log CLI dan Notifikasi via Socket.IO
 │       ├── PromptBuilder.php
 │       ├── ReportParser.php
 │       ├── JsonCleaner.php
-│       └── SocketNotifier.php    # Notifikasi via Socket.IO
 │
 ├── config/                     # File konfigurasi
 │   ├── patterns.json           # Pola kerentanan kustom

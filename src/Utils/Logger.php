@@ -2,6 +2,8 @@
 
 namespace Utils;
 
+use ElephantIO\Client;
+use ElephantIO\Engine\SocketIO\Version4X;
 use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
@@ -9,11 +11,16 @@ use Psr\Log\LogLevel;
 class Logger extends AbstractLogger implements LoggerInterface
 {
     private string $logFile;
+    private ?Client $client = null;
 
-    public function __construct()
+    public function __construct(private bool $useSocket = false, private string $roomName = '')
     {
         $this->logFile = '/app/logs/app.log';
         $this->ensureLogDirectoryExists();
+
+        if ($useSocket) {
+            $this->initializeClient();
+        }
     }
 
     private function ensureLogDirectoryExists(): void
@@ -21,6 +28,68 @@ class Logger extends AbstractLogger implements LoggerInterface
         $logDir = dirname($this->logFile);
         if (!is_dir($logDir)) {
             mkdir($logDir, 0777, true);
+        }
+    }
+
+    private function initializeClient(): void
+    {
+        try {
+            $host = $_ENV['SOCKET_HOST'] ?? 'localhost';
+            $port = $_ENV['SOCKET_PORT'] ?? 3000;
+
+            $this->client = new Client(new Version4X(
+                "http://{$host}:{$port}",
+                [],
+            ));
+
+            $this->client->connect();
+        } catch (\Exception $e) {
+            $this->error("Failed to initialize Socket.IO client", [
+                'error' => $e->getMessage()
+            ]);
+            $this->client = null;
+        }
+    }
+
+    public function sendUpdate(string $message, int $progress, array $data = []): void
+    {
+        if ($this->client === null) {
+            $this->warning("Socket.IO client not initialized, skipping update", [
+                'message' => $message,
+                'progress' => $progress
+            ]);
+            return;
+        }
+
+        try {
+            $payload = [
+                'room_name' => $this->roomName,
+                'message' => $message,
+                'progress' => $progress,
+                'timestamp' => time(),
+                'data' => $data
+            ];
+
+            $this->client->emit('engine-update', $payload);
+        } catch (\Exception $e) {
+            $this->error("Failed to send Socket.IO update", [
+                'error' => $e->getMessage(),
+                'message' => $message
+            ]);
+        }
+    }
+
+    public function disconnect(): void
+    {
+        if ($this->useSocket) {
+            try {
+                $this->client->disconnect();
+                $this->info("Destructor called: closing packet connection");
+            } catch (\Exception $e) {
+                $this->error("Failed to disconnect Socket.IO client", [
+                    'error' => $e->getMessage()
+                ]);
+            }
         }
     }
 
@@ -77,5 +146,10 @@ class Logger extends AbstractLogger implements LoggerInterface
         );
 
         file_put_contents($this->logFile, $logMessage, FILE_APPEND);
+        echo $logMessage;
+
+        if ($this->useSocket) {
+            $this->sendUpdate($logMessage, 0, $context);
+        }
     }
-} 
+}

@@ -27,7 +27,8 @@ class ReportParser
         return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 
-    public static function finalReport(string $reportJson) {
+    public static function finalReport(string $reportJson)
+    {
         // Load the Infection report
         $report = json_decode(file_get_contents('infection-report.json'), true);
 
@@ -134,10 +135,10 @@ class ReportParser
         $cleanedLines = array_map(function ($line) {
             return substr($line, 2);
         }, $changeLines);
-        
+
         // Re-add the '+' and '-' prefixes without the extra space
         $finalLines = [];
-        foreach($changeLines as $index => $originalLine) {
+        foreach ($changeLines as $index => $originalLine) {
             $prefix = $originalLine[0];
             $finalLines[] = $prefix . ' ' . $cleanedLines[$index];
         }

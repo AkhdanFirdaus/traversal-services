@@ -4,7 +4,6 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use App\AppService;
 use Utils\Logger;
-use Utils\SocketNotifier;
 
 // Ensure we have the repository URL argument
 if ($argc < 2) {
@@ -15,14 +14,12 @@ if ($argc < 2) {
 $repoUrl = $argv[1];
 $roomName = uniqid();
 
-$logger = new Logger();
-$socket = new SocketNotifier($logger, $roomName);
+$logger = new Logger(false);
 
 try {
-    $app = new AppService($logger, $socket);
+    $app = new AppService($logger);
     $results = $app->handleProcessRepo($repoUrl, $roomName);
 } catch (\Throwable $th) {
     echo $th->getMessage();
-    echo "\n";
     echo $th->getTrace();
 }

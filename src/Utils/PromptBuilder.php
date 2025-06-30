@@ -4,10 +4,10 @@ namespace Utils;
 
 class PromptBuilder
 {
-    public static function analyzeSystem(): string
-    {
-        // This prompt is well-defined and does not need changes.
-        return <<<EOT
+  public static function analyzeSystem(): string
+  {
+    // This prompt is well-defined and does not need changes.
+    return <<<EOT
 ```You are a security-focused PHPUnit test analyst. Given project files (git ls-files), PHPUnit results, and mutation testing results, identify PHP files likely vulnerable to Directory and Path Traversal or needing improved tests for these vulnerabilities. Output a JSON array of files and reasons.**
 
 You may call tools multiple times to get the source codes that may be needed to be analyzed based on the available files in the project directory.
@@ -58,12 +58,12 @@ A raw JSON array `[{"file": "...", "reason": "...", "related_tests": ["...", ...
   }
 ]```
 EOT;
-    }
+  }
 
-    public static function instruction()
-    {
-        // This prompt has been heavily revised to prevent runtime and logical errors.
-         return <<<EOT
+  public static function instruction()
+  {
+    // This prompt has been heavily revised to prevent runtime and logical errors.
+    return <<<EOT
 # ROLE: Expert PHPUnit Test Automation Engineer & Security Developer
 
 # PRIMARY GOAL
@@ -104,28 +104,30 @@ This is the most common point of failure. Follow these JSON formatting rules wit
 ### Example of the required **compact, single-line** format:
 `[{"file_path":"src/VulnFileRead.php","code":"<?php\\n\\nnamespace App;\\n\\n// Patched code..."},{"file_path":"tests/PatchedVulnFileReadTest.php","code":"<?php\\n\\nnamespace Tests;\\n\\nuse App\\\\VulnFileRead;\\nuse PHPUnit\\\\Framework\\\\TestCase;\\n\\n// Test for patch..."}]`
 EOT;
-    }
+  }
 
-    public static function generateContext(string $projectStructure, array $phpUnitReport, string $mutationReport): string {
-      $availableFilesContext = "The following files are available for analysis. Use the `get_file_content` tool to read them.\n\n";
-      $availableFilesContext .= "- Project Structure: $projectStructure\n";
-      $availableFilesContext .= "- Path Traversal Patterns: /patterns.json\n";
-      $availableFilesContext .= "- Mutation Report: $mutationReport\n";
-      
-      foreach ($phpUnitReport as $reportPath) {
-          $availableFilesContext .= "- PHPUnit Report: $reportPath\n";
-      }
-      return $availableFilesContext;
-    }
+  public static function generateContext(string $projectStructure, array $phpUnitReport, string $mutationReport): string
+  {
+    $availableFilesContext = "The following files are available for analysis. Use the `get_file_content` tool to read them.\n\n";
+    $availableFilesContext .= "- Project Structure: $projectStructure\n";
+    $availableFilesContext .= "- Path Traversal Patterns: /patterns.json\n";
+    $availableFilesContext .= "- Mutation Report: $mutationReport\n";
 
-    public static function generateTarget(array $specificAnalysis): string {
-      $path = $specificAnalysis['path'];
-      $reason = $specificAnalysis['reason'];
-      $details = json_encode($specificAnalysis['details'], JSON_PRETTY_PRINT);
-      
-      $target = "Content of `$path`";
-      $target .= "---\nReason for generating the test case:\n$reason";
-      $target .= "---\nDetail Mutation:\n$details";
-      return $target;
+    foreach ($phpUnitReport as $reportPath) {
+      $availableFilesContext .= "- PHPUnit Report: $reportPath\n";
     }
+    return $availableFilesContext;
+  }
+
+  public static function generateTarget(array $specificAnalysis): string
+  {
+    $path = $specificAnalysis['file'];
+    $reason = $specificAnalysis['reason'];
+    $details = json_encode($specificAnalysis['details'], JSON_PRETTY_PRINT);
+
+    $target = "Content of `$path`";
+    $target .= "---\nReason for generating the test case:\n$reason";
+    $target .= "---\nDetail Mutation:\n$details";
+    return $target;
+  }
 }
