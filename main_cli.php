@@ -14,7 +14,7 @@ if ($argc < 2) {
 $repoUrl = $argv[1];
 $roomName = uniqid();
 
-$logger = new Logger(false);
+$logger = new Logger();
 
 try {
     $app = new AppService($logger);

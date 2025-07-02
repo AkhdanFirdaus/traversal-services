@@ -27,6 +27,7 @@ class ReportParser
         return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 
+    //! TODO: Wajib di asses
     public static function finalReport(string $reportJson)
     {
         // Load the Infection report

@@ -59,8 +59,9 @@ function processingProject()
 
         $gitUrl = $input['gitUrl'];
         $roomName = $input['roomName'];
+        $useSocket = $input['useSocket'] ?? false;
 
-        $logger = new Logger(true, $roomName);
+        $logger = new Logger($roomName, $useSocket);
 
         $app = new AppService($logger);
 

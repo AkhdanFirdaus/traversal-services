@@ -5,7 +5,6 @@ namespace App;
 use Pipeline\RepositoryCloner;
 use Pipeline\InfectionRunner;
 use Pipeline\AiTestGenerator;
-use Pipeline\Exporter;
 use Utils\Logger;
 use Dotenv\Dotenv;
 use Pipeline\PhpUnitRunner;

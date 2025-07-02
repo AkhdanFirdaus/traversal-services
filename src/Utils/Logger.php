@@ -13,7 +13,7 @@ class Logger extends AbstractLogger implements LoggerInterface
     private string $logFile;
     private ?Client $client = null;
 
-    public function __construct(private bool $useSocket = false, private string $roomName = '')
+    public function __construct(private string $roomName = '', private bool $useSocket = false)
     {
         $this->logFile = '/app/logs/app.log';
         $this->ensureLogDirectoryExists();
