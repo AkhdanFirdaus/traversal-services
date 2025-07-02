@@ -9,7 +9,6 @@ services:
       - ./src:/app/src
       - ./logs:/app/logs
       - ./outputs:/app/outputs
-      - ./tmp:/tmp
     env_file:
       - .env
     environment:
